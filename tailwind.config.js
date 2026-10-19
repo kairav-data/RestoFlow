@@ -1,0 +1,95 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/features/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Geist', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Fraunces', 'Georgia', 'serif'],
+      },
+      colors: {
+        // Near-white neutral scale with a faint warm tint, so surfaces read crisp white against the red accent.
+        slate: {
+          50: "#FAF9F9",
+          100: "#F5F3F3",
+          200: "#E9E5E5",
+          300: "#D6D0D0",
+          400: "#A8A0A0",
+          500: "#7A7272",
+          600: "#5A5353",
+          700: "#403A3A",
+          800: "#2A2626",
+          850: "#221F1F",
+          900: "#1C1919",
+          950: "#120F0F",
+        },
+        // Brand red (kept under the existing "amber" key so every accent across the app follows the theme).
+        amber: {
+          50: "#FEF4F4",
+          100: "#FCE4E5",
+          200: "#F8C8CA",
+          300: "#F09DA1",
+          400: "#E0646B",
+          500: "#C8202F",
+          600: "#A81B28",
+          700: "#8A1621",
+          800: "#6E121B",
+          900: "#570F17",
+          950: "#2F070C",
+        },
+        brand: {
+          50: "#FEF4F4",
+          100: "#FCE4E5",
+          200: "#F8C8CA",
+          300: "#F09DA1",
+          400: "#E0646B",
+          500: "#C8202F",
+          gold: "#C8202F",
+          hover: "#A81B28",
+          dark: "#8A1621",
+        },
+        cream: {
+          50: "#FFFFFF",
+          100: "#FDFCFC",
+          200: "#FAF9F9",
+          300: "#F5F3F3",
+          400: "#E9E5E5",
+        },
+        obsidian: {
+          950: "#100D0D",
+          900: "#161212",
+          850: "#1C1717",
+          800: "#221C1C",
+          750: "#2D2626",
+          700: "#3A3131",
+        },
+        veg: "#16A34A",
+        nonveg: "#DC2626",
+        ai: {
+          light: "#F5F3FF",
+          border: "#DDD6FE",
+          text: "#7C3AED",
+          DEFAULT: "#8B5CF6",
+        },
+      },
+      boxShadow: {
+        subtle: "0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03)",
+        card: "0 2px 8px -2px rgba(0, 0, 0, 0.06), 0 1px 4px -1px rgba(0, 0, 0, 0.04)",
+        elevated: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
+      },
+      borderRadius: {
+        sm: "8px",
+        md: "12px",
+        lg: "16px",
+        xl: "20px",
+        "2xl": "24px",
+      },
+    },
+  },
+  plugins: [],
+};

@@ -1,0 +1,17 @@
+.env
+.env.local
+.env.*.local
+node_modules
+.next
+__pycache__/
+*.pyc
+.venv/
+
+# Encrypted server-side settings (admin-managed AI key)
+.data/
+
+.next-*/
+
+# Local-only
+venv/
+tsconfig.tsbuildinfo

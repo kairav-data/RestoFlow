@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 255 255 255; /* White */
+    --foreground: 24 24 27; /* Dark zinc */
+    --card: 255 255 255;
+    --card-foreground: 24 24 27;
+    --popover: 255 255 255;
+    --popover-foreground: 24 24 27;
+    --primary: 355 72% 45%; /* #C8202F */
+    --primary-foreground: 255 255 255;
+    --muted: 244 244 245;
+    --muted-foreground: 113 113 122;
+    --border: 226 232 240;
+    --radius: 0.75rem;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    color: #1C1919;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Custom scrollbar styling for sleek SaaS interface */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D6D0D0;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A8A0A0;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Shimmer animation for realistic skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #F5F3F3 25%, #E9E5E5 50%, #F5F3F3 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@layer base {
+  h1, h2, .font-display { font-family: theme('fontFamily.display'); letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid #C8202F; outline-offset: 2px; }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  body { background: #fff !important; }
+}
