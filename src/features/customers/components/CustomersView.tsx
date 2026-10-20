@@ -14,7 +14,7 @@ interface CustomersData {
     id: string;
     customerCode: string;
     name: string;
-    phone: string;
+    phone: string | null;
     email: string | null;
     visits: number;
     orders: number;
@@ -57,7 +57,7 @@ export const CustomersView: React.FC = () => {
     try {
       const qs = new URLSearchParams({ sort, limit: String(PAGE), offset: String(page * PAGE) });
       if (debounced) qs.set('q', debounced);
-      setData(await api<CustomersData>(`/api/portal/customers?${qs}`));
+      setData(await api<CustomersData>(`/api/portal/customers?${qs}`, { background: true }));
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load customers.');
@@ -110,7 +110,7 @@ export const CustomersView: React.FC = () => {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name, mobile or ID"
+              placeholder="Search name, email or ID"
               aria-label="Search customers"
               className="w-64 rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm focus:border-amber-400 focus:outline-none"
             />
@@ -146,7 +146,7 @@ export const CustomersView: React.FC = () => {
             <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
               {debounced
                 ? 'Try a different name or number.'
-                : 'When a guest signs in with their mobile number and orders, they are added here automatically.'}
+                : 'When a guest signs in with their email and orders, they are added here automatically.'}
             </p>
           </div>
         ) : (
@@ -156,7 +156,7 @@ export const CustomersView: React.FC = () => {
                 <tr>
                   <th className="px-4 py-3 font-medium">Guest</th>
                   <th className="px-4 py-3 font-medium">Guest ID</th>
-                  <th className="px-4 py-3 font-medium">Mobile</th>
+                  <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 text-right font-medium">Visits</th>
                   <th className="px-4 py-3 text-right font-medium">Orders</th>
                   <th className="px-4 py-3 text-right font-medium">Spent</th>
@@ -190,7 +190,7 @@ export const CustomersView: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700">{c.customerCode}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{c.phone}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{c.email ?? c.phone ?? "-"}</td>
                     <td className="px-4 py-3 text-right text-slate-700">{c.visits}</td>
                     <td className="px-4 py-3 text-right text-slate-700">{c.orders}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(c.totalSpent)}</td>

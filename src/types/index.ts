@@ -104,7 +104,7 @@ export interface Order {
   estimatedReadyMinutes: number;
   diningSessionId: string;
   serverName?: string;
-  customerPhone?: string;
+  customerEmail?: string;
   paymentStatus?: 'none' | 'pending' | 'paid';
   paymentMethod?: 'upi' | 'card' | 'cash' | 'wallet';
 }

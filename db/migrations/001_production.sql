@@ -36,7 +36,13 @@ CREATE TABLE IF NOT EXISTS otp_codes (
   consumed_at  timestamptz,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS otp_codes_phone_idx ON otp_codes (phone, created_at DESC);
+DO $$
+BEGIN
+  -- Migration 004 renames this column to "identifier", so only index it while the old name still exists.
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'otp_codes' AND column_name = 'phone') THEN
+    CREATE INDEX IF NOT EXISTS otp_codes_phone_idx ON otp_codes (phone, created_at DESC);
+  END IF;
+END $$;
 ALTER TABLE otp_codes ENABLE ROW LEVEL SECURITY;
 
 -- Staff login lookups are by slug + email; payments are looked up per order.

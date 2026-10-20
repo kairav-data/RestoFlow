@@ -48,25 +48,41 @@ export function toClientCategory(row: CategoryRow, itemCount: number): ClientCat
   return { id: row.slug, name: row.name, itemCount, image: row.imageUrl || FALLBACK_DISH };
 }
 
+type RestaurantRow = NonNullable<Awaited<ReturnType<typeof prisma.restaurant.findFirst>>>;
+const RESTAURANT_TTL_MS = 30_000;
+const restaurantCache = new Map<string, { at: number; row: RestaurantRow }>();
+
+/**
+ * The active restaurant for a public slug. Every guest request needs this and it rarely changes, so each
+ * server instance remembers it for 30 seconds instead of paying a database round trip every time.
+ */
 export async function findActiveRestaurant(slug: string) {
-  const restaurant = await prisma.restaurant.findFirst({ where: { slug: slug.trim().toLowerCase(), status: 'active' } });
-  if (!restaurant) throw new HttpError(404, 'Restaurant not found.');
+  const key = slug.trim().toLowerCase();
+  const hit = restaurantCache.get(key);
+  if (hit && Date.now() - hit.at < RESTAURANT_TTL_MS) return hit.row;
+  const restaurant = await prisma.restaurant.findFirst({ where: { slug: key, status: 'active' } });
+  if (!restaurant) {
+    restaurantCache.delete(key);
+    throw new HttpError(404, 'Restaurant not found.');
+  }
+  restaurantCache.set(key, { at: Date.now(), row: restaurant });
   return restaurant;
 }
 
 /** Menu and categories for one restaurant. Every query is scoped by restaurantId. */
 export async function loadMenu(restaurantId: string) {
-  const [categories, items] = await Promise.all([
+  // Popularity comes from real orders over the last two weeks (cancelled orders do not count).
+  // The three reads are independent, so they run together in one round trip.
+  const [categories, items, sold] = await Promise.all([
     prisma.menuCategory.findMany({ where: { restaurantId, isActive: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }),
     prisma.menuItem.findMany({ where: { restaurantId }, orderBy: { createdAt: 'desc' } }),
+    prisma.$queryRaw<{ id: string; qty: number }[]>`
+      SELECT i.menu_item_id AS id, sum(i.quantity)::int AS qty
+      FROM order_items i JOIN orders o ON o.id = i.order_id AND o.created_at = i.created_at
+      WHERE i.restaurant_id = ${restaurantId}::uuid AND o.status <> 'cancelled' AND i.created_at >= now() - interval '14 days'
+      GROUP BY i.menu_item_id`,
   ]);
   const slugById = new Map(categories.map((c) => [c.id, c.slug]));
-  // Popularity comes from real orders over the last two weeks (cancelled orders do not count).
-  const sold = await prisma.$queryRaw<{ id: string; qty: number }[]>`
-    SELECT i.menu_item_id AS id, sum(i.quantity)::int AS qty
-    FROM order_items i JOIN orders o ON o.id = i.order_id AND o.created_at = i.created_at
-    WHERE i.restaurant_id = ${restaurantId}::uuid AND o.status <> 'cancelled' AND i.created_at >= now() - interval '14 days'
-    GROUP BY i.menu_item_id`;
   const soldById = new Map(sold.map((r) => [r.id, r.qty]));
   const topIds = new Set([...sold].sort((x, y) => y.qty - x.qty).slice(0, 5).map((r) => r.id));
   const menu = items

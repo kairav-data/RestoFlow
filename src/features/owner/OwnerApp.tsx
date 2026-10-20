@@ -31,7 +31,7 @@ export const OwnerApp: React.FC<{ onSignOut: () => void }> = ({ onSignOut }) => 
         {activeSection === 'analytics-feedback' && <FeedbackInsightsView />}
       </div>
 
-      <div aria-live="polite" className="pointer-events-none fixed bottom-6 right-6 z-50">
+      <div aria-live="polite" className="pointer-events-none fixed bottom-6 right-6 z-[90]">
         {toast && (
           <div
             key={toast.id}

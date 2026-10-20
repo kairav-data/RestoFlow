@@ -18,6 +18,9 @@
     --radius: 0.75rem;
   }
 
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
   body {
     background-color: #FFFFFF;
     color: #1C1919;
@@ -79,4 +82,13 @@
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   body { background: #fff !important; }
+}
+
+@keyframes rf-loading-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.rf-loading-bar { animation: rf-loading-slide 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .rf-loading-bar { animation: none; width: 100%; }
 }

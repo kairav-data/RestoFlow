@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { AsyncButton } from '@/components/ui/AsyncButton';
 import { Banknote, BellRing, CheckCircle2, Printer, Search, UtensilsCrossed } from 'lucide-react';
 import { useOwner } from '../context/OwnerContext';
 import { formatCurrency } from '@/lib/utils';
@@ -43,12 +44,12 @@ const PaymentRow: React.FC<{ order: Order }> = ({ order }) => {
         {requested ? <BellRing className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" /> : <Banknote className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />}
         {requested ? `Wants to pay by ${order.paymentMethod ? PAY_LABEL[order.paymentMethod] : 'cash'}` : 'Unpaid'}
       </span>
-      <button
+      <AsyncButton
         onClick={() => markPaid(order.id, order.paymentMethod ?? 'cash')}
         className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-800"
       >
         Mark paid
-      </button>
+      </AsyncButton>
     </div>
   );
 };
@@ -145,7 +146,7 @@ export const LiveOrdersKdsView: React.FC = () => {
                           {ord.customerName && (
                             <p className="mt-0.5 text-[11px] text-slate-600">
                               {ord.customerName}
-                              {ord.customerPhone ? ` · ${ord.customerPhone}` : ''}
+                              {ord.customerEmail ? ` · ${ord.customerEmail}` : ''}
                             </p>
                           )}
                         </div>
@@ -169,35 +170,35 @@ export const LiveOrdersKdsView: React.FC = () => {
                       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
                         {ord.status === 'new' && (
                           <>
-                            <button
+                            <AsyncButton
                               onClick={() => updateOrderStatus(ord.id, 'cancelled')}
                               className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                             >
                               Cancel
-                            </button>
-                            <button
+                            </AsyncButton>
+                            <AsyncButton
                               onClick={() => updateOrderStatus(ord.id, 'preparing')}
                               className="flex-1 rounded-lg bg-amber-500 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600"
                             >
                               Accept &amp; start prep
-                            </button>
+                            </AsyncButton>
                           </>
                         )}
                         {ord.status === 'preparing' && (
-                          <button
+                          <AsyncButton
                             onClick={() => updateOrderStatus(ord.id, 'ready')}
                             className="w-full rounded-lg bg-emerald-500 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-600"
                           >
                             Mark ready
-                          </button>
+                          </AsyncButton>
                         )}
                         {ord.status === 'ready' && (
-                          <button
+                          <AsyncButton
                             onClick={() => updateOrderStatus(ord.id, 'served')}
                             className="w-full rounded-lg bg-slate-800 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900"
                           >
                             Mark served
-                          </button>
+                          </AsyncButton>
                         )}
                         {ord.status === 'served' && (
                           <span className="w-full rounded-lg bg-emerald-50 py-1 text-center text-[11px] font-bold text-emerald-700">

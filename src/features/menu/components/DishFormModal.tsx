@@ -18,6 +18,7 @@ import {
 } from '../services/dishForm';
 import { SPICE_LEVELS } from '../types';
 import { NutritionFields } from './NutritionFields';
+import { ErrorPanel } from '@/components/ui/ErrorPanel';
 
 interface DishFormModalProps {
   /** Pass a dish to edit it; leave empty to add a new one. */
@@ -35,6 +36,7 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({ dish, onClose }) =
   const [busy, setBusy] = useState(false);
   const [writing, setWriting] = useState(false);
   const [note, setNote] = useState('');
+  const [saveError, setSaveError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const isEdit = Boolean(dish);
 
@@ -81,15 +83,17 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({ dish, onClose }) =
     if (Object.keys(found).length > 0) return;
 
     setBusy(true);
+    setSaveError('');
     let next = values;
     // New dish without a description: let the AI write one from the name, as when scanning a menu.
     if (!isEdit && !values.description.trim()) {
       const text = await writeDescription().catch(() => '');
       next = { ...values, description: text || 'Freshly prepared specialty dish.' };
     }
-    const ok = dish ? await updateMenuItem(dish.id, formToChanges(next, dish)) : await addNewMenuItem(formToNewDish(next));
+    const result = dish ? await updateMenuItem(dish.id, formToChanges(next, dish)) : await addNewMenuItem(formToNewDish(next));
     setBusy(false);
-    if (ok) onClose();
+    if (result.ok) onClose();
+    else setSaveError(result.error ?? 'The dish could not be saved.');
   };
 
   return (
@@ -286,6 +290,12 @@ export const DishFormModal: React.FC<DishFormModalProps> = ({ dish, onClose }) =
             </div>
           </details>
         </div>
+
+        {saveError && (
+          <div className="px-6 pb-3">
+            <ErrorPanel title="This dish could not be saved" messages={[saveError]} />
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">

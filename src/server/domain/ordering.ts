@@ -24,17 +24,28 @@ export const placeOrderSchema = z.object({
 });
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
 
+type ActiveRestaurant = NonNullable<Awaited<ReturnType<typeof prisma.restaurant.findFirst>>>;
+
 /**
  * Creates an order for a signed-in guest. Prices, availability and totals are always taken from the database:
  * the client only says which dishes, how many, and which plate size.
+ *
+ * Speed: one parallel read (table, dishes, guest), then ONE SQL statement that reuses or opens the visit,
+ * counts the visit, allocates the ticket number, and writes the order, its items and the guest dish history.
+ * A single statement is atomic, so there is no multi-step transaction to wait on.
  */
-export async function placeOrder(restaurantId: string, customerId: string, input: PlaceOrderInput) {
-  const restaurant = await prisma.restaurant.findFirst({ where: { id: restaurantId, status: 'active' } });
-  if (!restaurant) throw new HttpError(404, 'Restaurant not found.');
+export async function placeOrder(restaurant: ActiveRestaurant, customerId: string, input: PlaceOrderInput) {
+  const restaurantId = restaurant.id;
 
-  const table = await prisma.diningTable.findFirst({
-    where: { restaurantId, name: { equals: input.tableName, mode: 'insensitive' }, isActive: true },
-  });
+  const [table, dishes, guest] = await Promise.all([
+    prisma.diningTable.findFirst({
+      where: { restaurantId, name: { equals: input.tableName, mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.menuItem.findMany({
+      where: { restaurantId, id: { in: [...new Set(input.items.map((i) => i.menuItemId))] } },
+    }),
+    prisma.customer.findUniqueOrThrow({ where: { id: customerId }, select: { customerCode: true } }),
+  ]);
   if (!table) throw new HttpError(404, 'This table is not set up for ordering. Please ask the staff.');
 
   // Merge repeated lines of the same dish and size.
@@ -44,10 +55,6 @@ export async function placeOrder(restaurantId: string, customerId: string, input
     const prev = lines.get(key);
     lines.set(key, prev ? { ...prev, quantity: Math.min(20, prev.quantity + line.quantity) } : line);
   }
-
-  const dishes = await prisma.menuItem.findMany({
-    where: { restaurantId, id: { in: [...new Set(input.items.map((i) => i.menuItemId))] } },
-  });
   const dishById = new Map(dishes.map((d) => [d.id, d]));
 
   const orderLines = [...lines.values()].map((line) => {
@@ -60,110 +67,92 @@ export async function placeOrder(restaurantId: string, customerId: string, input
     const unit = line.portion === 'half' ? dish.halfPriceMinor! : dish.priceMinor;
     const label = dish.halfPriceMinor ? ` (${line.portion === 'half' ? 'Half' : 'Full'} plate)` : '';
     return {
-      menuItemId: dish.id,
+      id: crypto.randomUUID(),
+      menu_item_id: dish.id,
       name: `${dish.name}${label}`,
       unit,
-      quantity: line.quantity,
+      qty: line.quantity,
       portion: dish.halfPriceMinor ? line.portion : null,
       notes: line.notes ?? null,
     };
   });
 
   const { taxPercent, servicePercent } = chargeRates(restaurant.settings);
-  const subtotal = orderLines.reduce((sum, l) => sum + l.unit * l.quantity, 0);
+  const subtotal = orderLines.reduce((sum, l) => sum + l.unit * l.qty, 0);
   const tax = Math.round((subtotal * taxPercent) / 100);
   const service = Math.round((subtotal * servicePercent) / 100);
   const total = subtotal + tax + service;
   const now = new Date();
+  const reuseSince = new Date(now.getTime() - SESSION_REUSE_MS);
+  const itemsJson = JSON.stringify(orderLines);
+  const notes = input.notes ?? null;
 
-  const orderId = await prisma.$transaction(async (tx) => {
-    // Re-use the guest's open session at this table, otherwise start a new visit.
-    let session = await tx.guestSession.findFirst({
-      where: {
-        restaurantId,
-        tableId: table.id,
-        customerId,
-        status: 'active',
-        startedAt: { gte: new Date(now.getTime() - SESSION_REUSE_MS) },
-      },
-      orderBy: { startedAt: 'desc' },
-    });
-    if (!session) {
-      session = await tx.guestSession.create({
-        data: { restaurantId, branchId: table.branchId, tableId: table.id, customerId },
-      });
-      await tx.restaurantCustomer.upsert({
-        where: { restaurantId_customerId: { restaurantId, customerId } },
-        create: { restaurantId, customerId, firstVisitAt: now, lastVisitAt: now, visitCount: 1 },
-        update: { lastVisitAt: now, visitCount: { increment: 1 } },
-      });
-    }
+  const created = await prisma.$queryRaw<{ id: string }[]>`
+    WITH
+    reuse AS (
+      SELECT id FROM guest_sessions
+      WHERE restaurant_id = ${restaurantId}::uuid AND table_id = ${table.id}::uuid AND customer_id = ${customerId}::uuid
+        AND status = 'active' AND started_at >= ${reuseSince}::timestamptz
+      ORDER BY started_at DESC LIMIT 1
+    ),
+    fresh AS (
+      INSERT INTO guest_sessions (restaurant_id, branch_id, table_id, customer_id, started_at)
+      SELECT ${restaurantId}::uuid, ${table.branchId}::uuid, ${table.id}::uuid, ${customerId}::uuid, ${now}::timestamptz
+      WHERE NOT EXISTS (SELECT 1 FROM reuse)
+      RETURNING id
+    ),
+    sess AS (SELECT id FROM reuse UNION ALL SELECT id FROM fresh),
+    visit AS (
+      INSERT INTO restaurant_customers (restaurant_id, customer_id, first_visit_at, last_visit_at, visit_count)
+      SELECT ${restaurantId}::uuid, ${customerId}::uuid, ${now}::timestamptz, ${now}::timestamptz, 1
+      WHERE EXISTS (SELECT 1 FROM fresh)
+      ON CONFLICT (restaurant_id, customer_id)
+      DO UPDATE SET last_visit_at = EXCLUDED.last_visit_at, visit_count = restaurant_customers.visit_count + 1
+      RETURNING 1
+    ),
+    ticket AS (
+      INSERT INTO order_ticket_counters (branch_id, day, last_number)
+      VALUES (
+        ${table.branchId}::uuid,
+        (${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text)::date,
+        COALESCE((
+          SELECT max(order_number) FROM orders
+          WHERE restaurant_id = ${restaurantId}::uuid AND branch_id = ${table.branchId}::uuid
+            AND created_at >= (date_trunc('day', ${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text) AT TIME ZONE ${restaurant.timezone}::text)
+        ), 0) + 1
+      )
+      ON CONFLICT (branch_id, day) DO UPDATE SET last_number = order_ticket_counters.last_number + 1
+      RETURNING last_number
+    ),
+    ord AS (
+      INSERT INTO orders (restaurant_id, branch_id, table_id, session_id, customer_id, order_number, order_type,
+                          subtotal_minor, tax_minor, service_charge_minor, total_minor, notes, created_at, updated_at)
+      SELECT ${restaurantId}::uuid, ${table.branchId}::uuid, ${table.id}::uuid, (SELECT id FROM sess), ${customerId}::uuid,
+             (SELECT last_number FROM ticket), 'qr_online', ${subtotal}::int, ${tax}::int, ${service}::int, ${total}::int,
+             ${notes}::text, ${now}::timestamptz, ${now}::timestamptz
+      RETURNING id, order_number
+    ),
+    items AS (
+      INSERT INTO order_items (id, order_id, restaurant_id, menu_item_id, name_snapshot, unit_price_minor, quantity,
+                               line_total_minor, portion, notes, created_at)
+      SELECT l.id, (SELECT id FROM ord), ${restaurantId}::uuid, l.menu_item_id, l.name, l.unit, l.qty, l.unit * l.qty,
+             l.portion, l.notes, ${now}::timestamptz
+      FROM jsonb_to_recordset(${itemsJson}::jsonb)
+           AS l(id uuid, menu_item_id uuid, name text, unit int, qty int, portion text, notes text)
+      RETURNING 1
+    ),
+    history AS (
+      INSERT INTO customer_dish_history (customer_id, customer_code, restaurant_id, branch_id, session_id, order_id,
+                                         order_item_id, order_number, table_name, menu_item_id, dish_name, portion,
+                                         quantity, unit_price_minor, line_total_minor, ordered_at)
+      SELECT ${customerId}::uuid, ${guest.customerCode}::text, ${restaurantId}::uuid, ${table.branchId}::uuid, (SELECT id FROM sess),
+             (SELECT id FROM ord), l.id, (SELECT order_number FROM ord), ${table.name}::text, l.menu_item_id, l.name, l.portion,
+             l.qty, l.unit, l.unit * l.qty, ${now}::timestamptz
+      FROM jsonb_to_recordset(${itemsJson}::jsonb)
+           AS l(id uuid, menu_item_id uuid, name text, unit int, qty int, portion text, notes text)
+      RETURNING 1
+    )
+    SELECT id FROM ord`;
 
-    // Ticket numbers are per branch per day; the advisory lock stops two simultaneous orders taking the same number.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${table.branchId}::text))`;
-    const next = await tx.$queryRaw<{ n: number }[]>`
-      SELECT COALESCE(MAX(order_number), 0)::int + 1 AS n FROM orders
-      WHERE restaurant_id = ${restaurantId}::uuid AND branch_id = ${table.branchId}::uuid
-        AND created_at >= (date_trunc('day', now() AT TIME ZONE ${restaurant.timezone}) AT TIME ZONE ${restaurant.timezone})`;
-
-    const order = await tx.order.create({
-      data: {
-        restaurantId,
-        branchId: table.branchId,
-        tableId: table.id,
-        sessionId: session.id,
-        customerId,
-        orderNumber: next[0].n,
-        orderType: 'qr_online',
-        subtotalMinor: subtotal,
-        taxMinor: tax,
-        serviceChargeMinor: service,
-        totalMinor: total,
-        notes: input.notes ?? null,
-        createdAt: now,
-      },
-    });
-    const itemIds = orderLines.map(() => crypto.randomUUID());
-    await tx.orderItem.createMany({
-      data: orderLines.map((l, n) => ({
-        id: itemIds[n],
-        orderId: order.id,
-        restaurantId,
-        menuItemId: l.menuItemId,
-        nameSnapshot: l.name,
-        unitPriceMinor: l.unit,
-        quantity: l.quantity,
-        lineTotalMinor: l.unit * l.quantity,
-        portion: l.portion,
-        notes: l.notes,
-        createdAt: now,
-      })),
-    });
-
-    // The guest's dish history: one row per dish, linked to their customer ID, so "what did they eat" is a single lookup.
-    const guest = await tx.customer.findUniqueOrThrow({ where: { id: customerId }, select: { customerCode: true } });
-    await tx.customerDishHistory.createMany({
-      data: orderLines.map((l, n) => ({
-        customerId,
-        customerCode: guest.customerCode,
-        restaurantId,
-        branchId: table.branchId,
-        sessionId: session.id,
-        orderId: order.id,
-        orderItemId: itemIds[n],
-        orderNumber: order.orderNumber,
-        tableName: table.name,
-        menuItemId: l.menuItemId,
-        dishName: l.name,
-        portion: l.portion,
-        quantity: l.quantity,
-        unitPriceMinor: l.unit,
-        lineTotalMinor: l.unit * l.quantity,
-        orderedAt: now,
-      })),
-    });
-    return order.id;
-  });
-
-  return orderId;
+  return created[0].id;
 }

@@ -1,3 +1,5 @@
+import { trackBusy } from './busy';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -7,8 +9,13 @@ export class ApiError extends Error {
   }
 }
 
-/** JSON fetch for the app's own API. Sends cookies, throws ApiError with a user-safe message on failure. */
-export async function api<T>(path: string, init?: Omit<RequestInit, 'body'> & { body?: unknown }): Promise<T> {
+type ApiInit = Omit<RequestInit, 'body'> & {
+  body?: unknown;
+  /** Periodic refreshes set this so they do not flash the global loading bar. */
+  background?: boolean;
+};
+
+async function request<T>(path: string, init?: Omit<ApiInit, 'background'>): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -25,4 +32,11 @@ export async function api<T>(path: string, init?: Omit<RequestInit, 'body'> & { 
     throw new ApiError(res.status, (data as { error?: string } | null)?.error || 'Something went wrong. Please try again.');
   }
   return data as T;
+}
+
+/** JSON fetch for the app's own API. Sends cookies, throws ApiError with a user-safe message on failure. */
+export function api<T>(path: string, init?: ApiInit): Promise<T> {
+  const { background, ...options } = init ?? {};
+  const work = request<T>(path, options);
+  return background ? work : trackBusy(work);
 }

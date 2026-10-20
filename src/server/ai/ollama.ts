@@ -55,6 +55,11 @@ ${req.outputHint ?? JSON.stringify(req.schema)}`, ...(req.image ? { images: [req
         503,
       );
     }
+    // Surface the provider reason when it is a model problem (retired, unavailable, no image support), minus its internal ref id.
+    const reason = detail?.error?.replace(/\s*\(ref:[^)]*\)\s*$/, '').trim();
+    if (reason && /retired|deprecated|not found|unavailable|does not support|image/i.test(reason)) {
+      throw new AiError(`The AI model "${OLLAMA_MODEL}" cannot be used: ${reason.slice(0, 160)}`, 503);
+    }
     throw new AiError('The AI model could not process this photo. Make sure it supports images.', 502);
   }
 

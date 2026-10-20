@@ -25,7 +25,7 @@ export const extractedDishSchema = z.object({
 });
 export type ExtractedDish = z.infer<typeof extractedDishSchema>;
 
-export const extractResponseSchema = z.object({ dishes: z.array(extractedDishSchema).max(150) });
+export const extractResponseSchema = z.object({ dishes: z.array(extractedDishSchema).max(500) });
 
 export const extractRequestSchema = z.object({
   image: z

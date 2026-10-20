@@ -1,4 +1,5 @@
 import 'server-only';
+import { Prisma } from '@prisma/client';
 import type { Order, OrderItem, OrderStatus as ClientStatus, OrderType as ClientType } from '@/types';
 import { prisma } from '../db';
 import { fromMinor } from './money';
@@ -14,77 +15,104 @@ type OrderWhere = {
   createdAt?: { gte?: Date };
 };
 
+interface Row {
+  id: string;
+  order_number: number;
+  order_type: string;
+  status: string;
+  subtotal_minor: number;
+  tax_minor: number;
+  service_charge_minor: number;
+  discount_minor: number;
+  total_minor: number;
+  created_at: Date;
+  session_id: string | null;
+  table_name: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  pay_status: string | null;
+  pay_method: string | null;
+  items: {
+    id: string;
+    menuItemId: string;
+    name: string;
+    unit: number;
+    qty: number;
+    portion: string | null;
+    notes: string | null;
+    image: string | null;
+    veg: boolean | null;
+  }[];
+}
+
 /**
- * Loads orders with their items, table name, customer and latest payment. The caller supplies a `where`
- * that is already scoped to one restaurant (and optionally one customer).
+ * Loads orders with their items, table name, customer and latest payment in ONE database round trip.
+ * The caller supplies a `where` that is already scoped to one restaurant (and optionally one customer).
  */
 export async function loadOrders(where: OrderWhere, take = 100): Promise<Order[]> {
-  const orders = await prisma.order.findMany({ where, orderBy: { createdAt: 'desc' }, take });
-  if (orders.length === 0) return [];
+  const filters: Prisma.Sql[] = [Prisma.sql`o.restaurant_id = ${where.restaurantId}::uuid`];
+  if (where.customerId) filters.push(Prisma.sql`o.customer_id = ${where.customerId}::uuid`);
+  if (where.id) filters.push(Prisma.sql`o.id = ${where.id}::uuid`);
+  if (where.status) filters.push(Prisma.sql`o.status::text = ANY(${where.status.in})`);
+  if (where.createdAt?.gte) filters.push(Prisma.sql`o.created_at >= ${where.createdAt.gte}`);
 
-  const orderIds = orders.map((o) => o.id);
-  const tableIds = [...new Set(orders.map((o) => o.tableId).filter((v): v is string => !!v))];
-  const customerIds = [...new Set(orders.map((o) => o.customerId).filter((v): v is string => !!v))];
-  const oldest = orders[orders.length - 1].createdAt;
+  const rows = await prisma.$queryRaw<Row[]>`
+    SELECT o.id, o.order_number, o.order_type::text AS order_type, o.status::text AS status,
+           o.subtotal_minor, o.tax_minor, o.service_charge_minor, o.discount_minor, o.total_minor,
+           o.created_at, o.session_id, t.name AS table_name, c.name AS customer_name, c.email AS customer_email,
+           pay.status::text AS pay_status, pay.method::text AS pay_method,
+           COALESCE((
+             SELECT json_agg(json_build_object(
+                      'id', i.id, 'menuItemId', i.menu_item_id, 'name', i.name_snapshot, 'unit', i.unit_price_minor,
+                      'qty', i.quantity, 'portion', i.portion, 'notes', i.notes, 'image', m.image_url, 'veg', m.is_vegetarian)
+                    ORDER BY i.name_snapshot)
+             FROM order_items i
+             LEFT JOIN menu_items m ON m.restaurant_id = i.restaurant_id AND m.id = i.menu_item_id
+             WHERE i.order_id = o.id AND i.created_at = o.created_at AND i.restaurant_id = o.restaurant_id
+           ), '[]'::json) AS items
+    FROM orders o
+    LEFT JOIN dining_tables t ON t.restaurant_id = o.restaurant_id AND t.id = o.table_id
+    LEFT JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN LATERAL (
+      SELECT p.status, p.method FROM payments p
+      WHERE p.restaurant_id = o.restaurant_id AND p.order_id = o.id
+      ORDER BY p.created_at DESC LIMIT 1
+    ) pay ON true
+    WHERE ${Prisma.join(filters, ' AND ')}
+    ORDER BY o.created_at DESC
+    LIMIT ${take}`;
 
-  const [items, tables, customers, payments, menuItems] = await Promise.all([
-    prisma.orderItem.findMany({
-      where: { restaurantId: where.restaurantId, orderId: { in: orderIds }, createdAt: { gte: oldest } },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.diningTable.findMany({ where: { restaurantId: where.restaurantId, id: { in: tableIds } } }),
-    prisma.customer.findMany({ where: { id: { in: customerIds } }, select: { id: true, name: true, phone: true } }),
-    prisma.payment.findMany({
-      where: { restaurantId: where.restaurantId, orderId: { in: orderIds } },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.menuItem.findMany({
-      where: { restaurantId: where.restaurantId },
-      select: { id: true, imageUrl: true, isVegetarian: true },
-    }),
-  ]);
-
-  const tableName = new Map(tables.map((t) => [t.id, t.name]));
-  const customerById = new Map(customers.map((c) => [c.id, c]));
-  const dish = new Map(menuItems.map((m) => [m.id, m]));
-  const latestPayment = new Map<string, (typeof payments)[number]>();
-  for (const p of payments) if (!latestPayment.has(p.orderId)) latestPayment.set(p.orderId, p);
-
-  return orders.map((o) => {
-    const customer = o.customerId ? customerById.get(o.customerId) : undefined;
-    const payment = latestPayment.get(o.id);
-    const orderItems: OrderItem[] = items
-      .filter((i) => i.orderId === o.id)
-      .map((i) => ({
-        id: i.id,
-        menuItemId: i.menuItemId,
-        name: i.nameSnapshot,
-        price: fromMinor(i.unitPriceMinor),
-        quantity: i.quantity,
-        image: dish.get(i.menuItemId)?.imageUrl || FALLBACK_DISH,
-        isVegetarian: dish.get(i.menuItemId)?.isVegetarian ?? true,
-        portion: (i.portion as 'half' | 'full' | null) ?? undefined,
-        specialInstructions: i.notes ?? undefined,
-      }));
+  return rows.map((o) => {
+    const items: OrderItem[] = o.items.map((i) => ({
+      id: i.id,
+      menuItemId: i.menuItemId,
+      name: i.name,
+      price: fromMinor(i.unit),
+      quantity: i.qty,
+      image: i.image || FALLBACK_DISH,
+      isVegetarian: i.veg ?? true,
+      portion: (i.portion as 'half' | 'full' | null) ?? undefined,
+      specialInstructions: i.notes ?? undefined,
+    }));
     return {
       id: o.id,
-      orderNumber: `#${o.orderNumber}`,
-      tableNumber: o.tableId ? tableName.get(o.tableId) ?? '' : '',
-      customerName: customer?.name,
-      customerPhone: customer?.phone,
-      orderType: TYPE_TO_CLIENT[o.orderType] ?? 'dine-in',
-      items: orderItems,
-      subtotal: fromMinor(o.subtotalMinor),
-      taxes: fromMinor(o.taxMinor),
-      serviceCharge: fromMinor(o.serviceChargeMinor),
-      discount: fromMinor(o.discountMinor),
-      total: fromMinor(o.totalMinor),
+      orderNumber: `#${o.order_number}`,
+      tableNumber: o.table_name ?? '',
+      customerName: o.customer_name ?? undefined,
+      customerEmail: o.customer_email ?? undefined,
+      orderType: TYPE_TO_CLIENT[o.order_type] ?? 'dine-in',
+      items,
+      subtotal: fromMinor(o.subtotal_minor),
+      taxes: fromMinor(o.tax_minor),
+      serviceCharge: fromMinor(o.service_charge_minor),
+      discount: fromMinor(o.discount_minor),
+      total: fromMinor(o.total_minor),
       status: o.status as ClientStatus,
-      createdAt: o.createdAt.toISOString(),
+      createdAt: o.created_at.toISOString(),
       estimatedReadyMinutes: 15,
-      diningSessionId: o.sessionId ?? '',
-      paymentStatus: payment ? (payment.status === 'paid' ? 'paid' : 'pending') : 'none',
-      paymentMethod: payment?.method,
+      diningSessionId: o.session_id ?? '',
+      paymentStatus: o.pay_status ? (o.pay_status === 'paid' ? 'paid' : 'pending') : 'none',
+      paymentMethod: (o.pay_method as Order['paymentMethod']) ?? undefined,
     } satisfies Order;
   });
 }

@@ -18,6 +18,13 @@ export type OwnerNavSection =
 
 export type { NewDish };
 
+/** Outcome of a save. `added` counts dishes already saved when a multi-dish save stops part-way. */
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+  added?: number;
+}
+
 export interface Toast {
   id: number;
   message: string;
@@ -41,13 +48,14 @@ interface OwnerContextType {
   menuItems: MenuItem[];
   categories: MenuCategory[];
   toggleItemAvailability: (itemId: string) => Promise<void>;
-  addNewMenuItem: (item: NewDish) => Promise<boolean>;
-  addNewMenuItems: (items: NewDish[]) => Promise<boolean>;
+  addNewMenuItem: (item: NewDish) => Promise<ActionResult>;
+  /** Saves in batches of 50 so a scan of hundreds of dishes works. `onProgress` reports how many are saved so far. */
+  addNewMenuItems: (items: NewDish[], onProgress?: (done: number, total: number) => void) => Promise<ActionResult>;
   /** Pass undefined to stop offering a half plate. */
   setHalfPrice: (itemId: string, halfPrice: number | undefined) => Promise<void>;
   deleteMenuItem: (itemId: string) => Promise<void>;
   /** Saves changes to an existing dish. Pass `halfPrice: null` / `nutrition: null` to clear them. */
-  updateMenuItem: (itemId: string, changes: DishChanges) => Promise<boolean>;
+  updateMenuItem: (itemId: string, changes: DishChanges) => Promise<ActionResult>;
   toast: Toast | null;
   notify: (message: string, tone?: Toast['tone']) => void;
 }
@@ -70,7 +78,7 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
   const notify = useCallback((message: string, tone: Toast['tone'] = 'success') => {
     window.clearTimeout(toastTimer.current);
     setToast({ id: Date.now(), message, tone });
-    toastTimer.current = window.setTimeout(() => setToast(null), tone === 'error' ? 6000 : 3000);
+    toastTimer.current = window.setTimeout(() => setToast(null), tone === 'error' ? 9000 : 3000);
   }, []);
 
   const fail = useCallback(
@@ -78,12 +86,18 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
     [notify],
   );
 
+  const refreshing = useRef(false);
   const refreshOrders = useCallback(async () => {
+    // A slow connection must not stack up requests: skip this tick while the last one is still running.
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
-      setOrders((await api<{ orders: Order[] }>('/api/portal/orders?hours=24')).orders);
+      setOrders((await api<{ orders: Order[] }>('/api/portal/orders?hours=24', { background: true })).orders);
       setOrdersLoaded(true);
     } catch {
       /* a failed background refresh keeps the last known orders on screen */
+    } finally {
+      refreshing.current = false;
     }
   }, []);
 
@@ -135,14 +149,24 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
     nutrition: d.nutrition,
   });
 
-  const addNewMenuItems = async (items: NewDish[]): Promise<boolean> => {
+  const errorText = (err: unknown) => (err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+  const MENU_BATCH = 50;
+
+  const addNewMenuItems = async (items: NewDish[], onProgress?: (done: number, total: number) => void): Promise<ActionResult> => {
+    let added = 0;
     try {
-      applyMenu(await api('/api/portal/menu', { method: 'POST', body: { items: items.map(toApiDish) } }));
-      notify(`${items.length} dish${items.length > 1 ? 'es' : ''} added to your menu.`);
-      return true;
+      for (let i = 0; i < items.length; i += MENU_BATCH) {
+        const batch = items.slice(i, i + MENU_BATCH);
+        applyMenu(await api('/api/portal/menu', { method: 'POST', body: { items: batch.map(toApiDish) } }));
+        added += batch.length;
+        onProgress?.(added, items.length);
+      }
+      notify(`${added} dish${added > 1 ? 'es' : ''} added to your menu.`);
+      return { ok: true, added };
     } catch (err) {
-      fail(err);
-      return false;
+      const error = errorText(err);
+      notify(added > 0 ? `${added} of ${items.length} dishes were added, then it stopped: ${error}` : error, 'error');
+      return { ok: false, error, added };
     }
   };
 
@@ -156,14 +180,14 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
     }
   };
 
-  const updateMenuItem = async (itemId: string, changes: DishChanges): Promise<boolean> => {
+  const updateMenuItem = async (itemId: string, changes: DishChanges): Promise<ActionResult> => {
     try {
       applyMenu(await api(`/api/portal/menu/${itemId}`, { method: 'PATCH', body: changes }));
       notify('Dish updated.');
-      return true;
+      return { ok: true };
     } catch (err) {
       fail(err);
-      return false;
+      return { ok: false, error: errorText(err) };
     }
   };
 

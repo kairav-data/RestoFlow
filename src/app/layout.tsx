@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { GlobalLoadingBar } from '@/components/ui/GlobalLoadingBar';
 
 export const metadata: Metadata = {
   title: {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased selection:bg-amber-100 selection:text-amber-900">
+        <GlobalLoadingBar />
         {children}
       </body>
     </html>

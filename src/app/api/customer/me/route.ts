@@ -10,5 +10,5 @@ export const GET = route(async () => {
   if (!session) return json({ customer: null });
   const customer = await prisma.customer.findUnique({ where: { id: session.sub } });
   if (!customer || customer.status !== 'active') return json({ customer: null });
-  return json({ customer: { id: customer.id, name: customer.name, phone: customer.phone } });
+  return json({ customer: { id: customer.id, name: customer.name, email: customer.email } });
 });

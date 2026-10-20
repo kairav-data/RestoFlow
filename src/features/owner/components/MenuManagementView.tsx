@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { MenuItem } from '@/types';
 import { MenuScanModal } from '@/features/menu/components/MenuScanModal';
 import { DishFormModal } from '@/features/menu/components/DishFormModal';
+import { AsyncButton } from '@/components/ui/AsyncButton';
 
 export const MenuManagementView: React.FC = () => {
   const { menuItems, toggleItemAvailability, setHalfPrice, deleteMenuItem } = useOwner();
@@ -167,7 +168,7 @@ export const MenuManagementView: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <button
+                    <AsyncButton
                       onClick={() => toggleItemAvailability(item.id)}
                       className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
                         item.isAvailable
@@ -176,7 +177,7 @@ export const MenuManagementView: React.FC = () => {
                       }`}
                     >
                       {item.isAvailable ? '● Available' : '○ Disabled (86)'}
-                    </button>
+                    </AsyncButton>
                   </td>
                   <td className="py-3 px-4 text-right">
                     <button
@@ -186,14 +187,12 @@ export const MenuManagementView: React.FC = () => {
                       <Pencil className="w-3 h-3" aria-hidden="true" />
                       Edit
                     </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Delete ${item.name}?`)) void deleteMenuItem(item.id);
-                      }}
+                    <AsyncButton
+                      onClick={() => (window.confirm(`Delete ${item.name}?`) ? deleteMenuItem(item.id) : undefined)}
                       className="ml-3 text-rose-600 hover:text-rose-800 font-bold text-[11px] hover:underline"
                     >
                       Delete
-                    </button>
+                    </AsyncButton>
                   </td>
                 </tr>
               ))}

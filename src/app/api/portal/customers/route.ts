@@ -17,7 +17,7 @@ interface Row {
   id: string;
   customer_code: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   visit_count: number;
   total_spent_minor: bigint;
@@ -36,7 +36,7 @@ export const GET = route(async (request) => {
   const limit = Math.min(100, Math.max(1, Number(params.get('limit')) || 25));
   const offset = Math.max(0, Number(params.get('offset')) || 0);
   const like = `%${q.replace(/[%_\\]/g, '\\$&')}%`;
-  const search = q ? Prisma.sql`AND (c.name ILIKE ${like} OR c.phone LIKE ${like} OR c.customer_code ILIKE ${like})` : Prisma.empty;
+  const search = q ? Prisma.sql`AND (c.name ILIKE ${like} OR c.phone LIKE ${like} OR c.email ILIKE ${like} OR c.customer_code ILIKE ${like})` : Prisma.empty;
 
   const [rows, summary] = await Promise.all([
     prisma.$queryRaw<Row[]>`

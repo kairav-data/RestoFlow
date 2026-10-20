@@ -51,8 +51,8 @@ export const CustomerHistoryPanel: React.FC<{ customerId: string; onClose: () =>
                 <span className="rounded-md bg-slate-900 px-2 py-0.5 font-mono font-semibold text-white">
                   {data.customer.customerCode}
                 </span>
-                <span className="font-mono">{data.customer.phone}</span>
                 {data.customer.email && <span>{data.customer.email}</span>}
+                {data.customer.phone && <span className="font-mono">{data.customer.phone}</span>}
               </p>
             )}
           </div>

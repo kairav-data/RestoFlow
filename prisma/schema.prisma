@@ -229,11 +229,11 @@ model Promotion {
 
 model Customer {
   id              String        @id @default(uuid()) @db.Uuid
-  phone           String        @unique
+  phone           String?       @unique
   customerCode    String        @unique @default(dbgenerated("('RFC-'::text || nextval('customer_code_seq'::regclass))")) @map("customer_code")
   phoneVerifiedAt DateTime?     @map("phone_verified_at") @db.Timestamptz
   name            String
-  email           String?
+  email           String?       @unique
   passwordHash    String?       @map("password_hash")
   dietary         String[]
   allergies       String?
@@ -413,14 +413,14 @@ model RestaurantDailyStat {
 
 model OtpCode {
   id         String    @id @default(uuid()) @db.Uuid
-  phone      String
+  identifier String
   codeHash   String    @map("code_hash")
   attempts   Int       @default(0) @db.SmallInt
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  @@index([phone, createdAt(sort: Desc)])
+  @@index([identifier, createdAt(sort: Desc)])
   @@map("otp_codes")
 }
 

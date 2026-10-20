@@ -26,7 +26,6 @@ export const POST = route<Ctx>(async (request, { params }) => {
   }
   const restaurant = await findActiveRestaurant(params.slug);
   const input = placeOrderSchema.parse(await readJson(request));
-  const orderId = await placeOrder(restaurant.id, customerId, input);
-  const [order] = await loadOrders({ restaurantId: restaurant.id, customerId, id: orderId }, 1);
-  return json({ order }, { status: 201 });
+  const orderId = await placeOrder(restaurant, customerId, input);
+  return json({ orderId }, { status: 201 });
 });

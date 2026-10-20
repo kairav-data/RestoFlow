@@ -135,11 +135,17 @@ export const CustomerProvider: React.FC<{ tableName: string; children: React.Rea
     else removeKey(cartKey);
   }, [cart, cartKey]);
 
+  const refreshing = useRef(false);
   const refreshOrders = useCallback(async () => {
+    // A slow connection must not stack up requests: skip this tick while the last one is still running.
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
-      setOrders((await api<{ orders: Order[] }>(`/api/r/${restaurant.slug}/orders`)).orders);
+      setOrders((await api<{ orders: Order[] }>(`/api/r/${restaurant.slug}/orders`, { background: true })).orders);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setOrders([]);
+    } finally {
+      refreshing.current = false;
     }
   }, [restaurant.slug]);
 

@@ -16,7 +16,7 @@ export interface CustomerHistory {
     id: string;
     customerCode: string;
     name: string;
-    phone: string;
+    phone: string | null;
     email: string | null;
     memberSince: string;
   };

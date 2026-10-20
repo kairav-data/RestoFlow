@@ -8,6 +8,7 @@ import { useRestaurant } from '@/features/restaurants/context/RestaurantContext'
 import { fileToResizedDataUrl } from '@/lib/image';
 import { describeDishes, descriptionKey } from '../services/descriptionService';
 import { cn } from '@/lib/utils';
+import { ErrorPanel } from '@/components/ui/ErrorPanel';
 import {
   draftToMenuItem,
   draftIssue,
@@ -30,6 +31,10 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [previews, setPreviews] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
+  const [photoErrors, setPhotoErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
+  const [saveError, setSaveError] = useState('');
   const [drafts, setDrafts] = useState<DraftDish[]>([]);
   const [describing, setDescribing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,24 +61,26 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const runScan = async () => {
     setStep('scanning');
     setError('');
+    setPhotoErrors([]);
+    setSaveError('');
     setProgress(0);
     const batches: ExtractedDish[][] = [];
-    let lastError = '';
+    const failures: string[] = [];
     for (let i = 0; i < files.length; i++) {
       try {
         batches.push(await scanMenuPhoto(files[i], categories));
       } catch (err) {
-        lastError = err instanceof Error ? err.message : 'Menu scanning failed.';
+        failures.push(`Photo ${i + 1}: ${err instanceof Error ? err.message : 'Menu scanning failed.'}`);
       }
       setProgress(i + 1);
     }
     const result = toDrafts(batches, categories, menuItems.map((m) => m.name));
+    setPhotoErrors(failures);
     if (result.length === 0) {
-      setError(lastError || 'No new dishes were found. Try a clearer, well-lit photo of the menu.');
+      if (failures.length === 0) setError('No new dishes were found. Try a clearer, well-lit photo of the menu.');
       setStep('upload');
       return;
     }
-    if (lastError) setError(`Some photos could not be read: ${lastError}`);
     setDrafts(result);
     setStep('review');
     fillDescriptions(result);
@@ -135,8 +142,27 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     .filter(Boolean)
     .join('; ');
 
-  const confirm = () => {
-    void addNewMenuItems(selected.map(draftToMenuItem)).then((ok) => ok && onClose());
+  const confirm = async () => {
+    setSaving(true);
+    setSaveError('');
+    setSaveProgress({ done: 0, total: selected.length });
+    const result = await addNewMenuItems(selected.map(draftToMenuItem), (done, total) => setSaveProgress({ done, total }));
+    setSaving(false);
+    if (result.ok) {
+      onClose();
+      return;
+    }
+    // Dishes saved before the failure leave the list, so trying again never creates duplicates.
+    const added = result.added ?? 0;
+    if (added > 0) {
+      const saved = new Set(selected.slice(0, added).map((d) => d.key));
+      setDrafts((prev) => prev.filter((d) => !saved.has(d.key)));
+    }
+    setSaveError(
+      added > 0
+        ? `${added} dishes were added to your menu. The rest could not be saved: ${result.error ?? 'unknown error'}. Press the button again to retry the remaining dishes.`
+        : result.error ?? 'The dishes could not be saved.',
+    );
   };
 
   return (
@@ -231,20 +257,18 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 Reading photo {Math.min(progress + 1, files.length)} of {files.length}…
               </p>
             )}
-            {error && (
-              <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </p>
-            )}
+            {error && <ErrorPanel className="mt-4" title="Something went wrong" messages={[error]} />}
+            <ErrorPanel className="mt-4" title="These photos could not be read" messages={photoErrors} />
           </div>
         )}
 
         {step === 'review' && (
           <div className="flex-1 overflow-y-auto">
-            {error && (
-              <p role="alert" className="m-5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </p>
+            {(error || photoErrors.length > 0) && (
+              <div className="sticky top-0 z-10 space-y-3 bg-white p-5 pb-3">
+                {error && <ErrorPanel title="Something went wrong" messages={[error]} />}
+                <ErrorPanel title="Some photos could not be read, so their dishes are missing" messages={photoErrors} />
+              </div>
             )}
             <ul className="divide-y divide-slate-200">
               {drafts.map((d) => (
@@ -365,6 +389,12 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           </div>
         )}
 
+        {step === 'review' && saveError && (
+          <div className="border-t border-slate-200 bg-white px-5 py-3">
+            <ErrorPanel title="The dishes could not be added" messages={[saveError]} />
+          </div>
+        )}
+
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
           {step === 'review' ? (
             <>
@@ -382,10 +412,14 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 <button
                   type="button"
                   onClick={confirm}
-                  disabled={selected.length === 0 || blocked > 0}
-                  className="rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={selected.length === 0 || blocked > 0 || saving}
+                  aria-busy={saving}
+                  className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Add {selected.length} dish{selected.length === 1 ? '' : 'es'} to menu
+                  {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  {saving
+                    ? `Adding ${saveProgress.done} of ${saveProgress.total}…`
+                    : `Add ${selected.length} dish${selected.length === 1 ? '' : 'es'} to menu`}
                 </button>
               </div>
             </>
@@ -398,7 +432,12 @@ export const MenuScanModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 disabled={files.length === 0 || step === 'scanning'}
                 className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ScanText className="h-4 w-4" aria-hidden="true" /> Read menu
+                {step === 'scanning' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ScanText className="h-4 w-4" aria-hidden="true" />
+                )}
+                {step === 'scanning' ? 'Reading menu…' : 'Read menu'}
               </button>
             </>
           )}

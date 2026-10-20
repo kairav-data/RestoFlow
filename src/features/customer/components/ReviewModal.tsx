@@ -286,9 +286,12 @@ export const ReviewModal: React.FC = () => {
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)] z-30 mx-auto max-w-md px-4">
         <button
           onClick={submit}
-          className="w-full rounded-lg bg-slate-900 py-3.5 text-sm font-semibold text-white shadow-elevated transition-colors hover:bg-slate-800"
+          disabled={sending}
+          aria-busy={sending}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 py-3.5 text-sm font-semibold text-white shadow-elevated transition-colors hover:bg-slate-800 disabled:opacity-75"
         >
-          Submit feedback
+          {sending && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden="true" />}
+          {sending ? 'Sending…' : 'Submit feedback'}
         </button>
       </div>
     </div>

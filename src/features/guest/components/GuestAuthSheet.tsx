@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, ShieldCheck, Smartphone, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, ShieldCheck, X } from 'lucide-react';
 import { RestaurantBrand } from '@/features/restaurants/components/RestaurantBrand';
 import { useCustomer } from '@/features/customer/context/CustomerContext';
 import { ApiError } from '@/lib/api';
-import { maskPhone, requestOtp, verifyOtp } from '../services/guestService';
+import { maskEmail, requestOtp, verifyOtp } from '../services/guestService';
 
-type Step = 'phone' | 'otp';
+type Step = 'email' | 'otp';
 
 const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none';
@@ -15,8 +15,8 @@ const inputClass =
 /** Bottom sheet that signs a guest in with a mobile number and an SMS code. New guests are asked for their name once. */
 export const GuestAuthSheet: React.FC = () => {
   const { restaurant, selectedTable, isAuthOpen, closeAuth, completeLogin } = useCustomer();
-  const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
   const [normalized, setNormalized] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -29,7 +29,7 @@ export const GuestAuthSheet: React.FC = () => {
 
   useEffect(() => {
     if (isAuthOpen) return;
-    setStep('phone');
+    setStep('email');
     setCode('');
     setName('');
     setNeedsName(false);
@@ -58,8 +58,8 @@ export const GuestAuthSheet: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      const res = await requestOtp(phone);
-      setNormalized(res.phone);
+      const res = await requestOtp(email);
+      setNormalized(res.email);
       setDevCode(res.devCode ?? '');
       setStep('otp');
       setResendIn(30);
@@ -102,7 +102,7 @@ export const GuestAuthSheet: React.FC = () => {
             {step === 'otp' && (
               <button
                 onClick={() => {
-                  setStep('phone');
+                  setStep('email');
                   setError('');
                   setNeedsName(false);
                 }}
@@ -120,32 +120,32 @@ export const GuestAuthSheet: React.FC = () => {
         </div>
 
         <h2 id="auth-title" className="text-2xl font-semibold text-slate-900">
-          {step === 'phone' ? 'Sign in with your mobile' : needsName ? 'One last thing' : 'Enter the 6-digit code'}
+          {step === 'email' ? 'Sign in with your email' : needsName ? 'One last thing' : 'Enter the 6-digit code'}
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          {step === 'phone'
-            ? 'We will text you a code so the kitchen knows who to serve.'
+          {step === 'email'
+            ? 'We will email you a code so the kitchen knows who to serve.'
             : needsName
               ? 'Welcome! Tell us your name so we can greet you.'
-              : `Sent to ${maskPhone(normalized)}.`}
+              : `Sent to ${maskEmail(normalized)}. Check your spam folder if it does not arrive.`}
         </p>
 
-        {step === 'phone' ? (
+        {step === 'email' ? (
           <form onSubmit={sendCode} className="mt-6 space-y-4" noValidate>
             <div>
-              <label htmlFor="guest-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
-                Mobile number
+              <label htmlFor="guest-email" className="mb-1.5 block text-sm font-medium text-slate-700">
+                Email address
               </label>
               <div className="relative">
-                <Smartphone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  id="guest-phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="98765 43210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  id="guest-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className={`${inputClass} pl-10`}
                 />
               </div>
@@ -157,7 +157,7 @@ export const GuestAuthSheet: React.FC = () => {
             )}
             <button
               type="submit"
-              disabled={busy || phone.replace(/\D/g, '').length < 8}
+              disabled={busy || !/^\S+@\S+\.\S+$/.test(email.trim())}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Send code
@@ -199,7 +199,7 @@ export const GuestAuthSheet: React.FC = () => {
             )}
             {devCode && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Development mode: SMS is not configured, so the code is <span className="font-mono font-semibold">{devCode}</span>.
+                Development mode: email is not configured, so the code is <span className="font-mono font-semibold">{devCode}</span>.
               </p>
             )}
             {error && (
@@ -228,7 +228,7 @@ export const GuestAuthSheet: React.FC = () => {
 
         <p className="mt-6 flex items-center gap-2 text-xs text-slate-500">
           <ShieldCheck className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-          Your number is shared only with {restaurant.name} and is never sold.
+          Your email is shared only with {restaurant.name} and is never sold.
         </p>
       </div>
     </div>
