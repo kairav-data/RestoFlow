@@ -288,6 +288,9 @@ CREATE TABLE orders (
   discount_minor        integer NOT NULL DEFAULT 0 CHECK (discount_minor >= 0),
   total_minor           integer NOT NULL CHECK (total_minor >= 0),
   notes                 text,
+  is_parcel             boolean NOT NULL DEFAULT false, -- packed to take away (see migration 006)
+  guest_name            text CHECK (guest_name IS NULL OR char_length(guest_name) <= 60),
+  placed_by_staff_id    uuid REFERENCES staff_users (id) ON DELETE SET NULL, -- NULL for guest QR orders
   ready_at              timestamptz,
   served_at             timestamptz,
   created_at            timestamptz NOT NULL DEFAULT now(),

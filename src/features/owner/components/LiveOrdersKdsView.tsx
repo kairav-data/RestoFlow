@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { AsyncButton } from '@/components/ui/AsyncButton';
-import { Banknote, BellRing, CheckCircle2, Printer, Search, UtensilsCrossed } from 'lucide-react';
+import { Banknote, BellRing, CheckCircle2, Package, Plus, Printer, Search, UtensilsCrossed } from 'lucide-react';
 import { useOwner } from '../context/OwnerContext';
+import { StaffOrderComposer } from './StaffOrderComposer';
 import { formatCurrency } from '@/lib/utils';
 import type { Order, OrderStatus } from '@/types';
 
@@ -54,9 +55,39 @@ const PaymentRow: React.FC<{ order: Order }> = ({ order }) => {
   );
 };
 
+const OPEN: OrderStatus[] = ['new', 'preparing', 'ready'];
+
+/** Parcel badge, plus a toggle while the order is still in the kitchen. */
+const ParcelControl: React.FC<{ order: Order }> = ({ order }) => {
+  const { setParcel } = useOwner();
+  const open = OPEN.includes(order.status);
+  if (!open) {
+    return order.isParcel ? (
+      <span className="flex items-center gap-1 text-[11px] font-semibold text-violet-700">
+        <Package className="h-3.5 w-3.5" aria-hidden="true" /> Parcel
+      </span>
+    ) : null;
+  }
+  return (
+    <AsyncButton
+      onClick={() => setParcel(order.id, !order.isParcel)}
+      aria-pressed={Boolean(order.isParcel)}
+      className={`rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+        order.isParcel ? 'bg-violet-100 text-violet-800 hover:bg-violet-200' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+      }`}
+    >
+      <Package className="h-3.5 w-3.5" aria-hidden="true" />
+      {order.isParcel ? 'Parcel' : 'Mark parcel'}
+    </AsyncButton>
+  );
+};
+
+const ticketTitle = (o: Order) => (o.tableNumber ? `Table ${o.tableNumber}` : o.isParcel ? 'Parcel' : 'Counter');
+
 export const LiveOrdersKdsView: React.FC = () => {
   const { orders, ordersLoaded, updateOrderStatus } = useOwner();
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [composing, setComposing] = useState(false);
 
   const filteredOrders = orders.filter((o) => {
     if (o.status === 'cancelled') return false;
@@ -65,7 +96,8 @@ export const LiveOrdersKdsView: React.FC = () => {
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.tableNumber.toLowerCase().includes(q) ||
-      (o.customerName?.toLowerCase().includes(q) ?? false)
+      (o.customerName?.toLowerCase().includes(q) ?? false) ||
+      (Boolean(o.isParcel) && q.length >= 3 && 'parcel'.startsWith(q))
     );
   });
 
@@ -75,11 +107,11 @@ export const LiveOrdersKdsView: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Live orders</h2>
           <p className="text-xs text-slate-500">
-            Orders from your table QR codes appear here within seconds. Showing the last 24 hours.
+            QR orders appear here within seconds. Use New order for guests without a phone or for parcels. Showing the last 24 hours.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
@@ -98,15 +130,25 @@ export const LiveOrdersKdsView: React.FC = () => {
             <Printer className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Print</span>
           </button>
+          <button
+            onClick={() => setComposing(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>New order</span>
+          </button>
         </div>
       </div>
+
+      {composing && <StaffOrderComposer onClose={() => setComposing(false)} />}
 
       {ordersLoaded && orders.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <UtensilsCrossed className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
           <h3 className="mt-3 text-base font-semibold text-slate-900">No orders yet</h3>
           <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
-            When a guest scans a table QR and orders, the ticket shows up here automatically.
+            When a guest scans a table QR and orders, the ticket shows up here automatically. Taking an order in person?
+            Use New order.
           </p>
         </div>
       )}
@@ -134,15 +176,25 @@ export const LiveOrdersKdsView: React.FC = () => {
                   colOrders.map((ord) => (
                     <article
                       key={ord.id}
-                      className="space-y-3 rounded-xl border border-slate-200/90 bg-white p-4 shadow-subtle transition-colors hover:border-amber-400"
+                      className={`space-y-3 rounded-xl border bg-white p-4 shadow-subtle transition-colors hover:border-amber-400 ${
+                        ord.isParcel ? 'border-violet-300' : 'border-slate-200/90'
+                      }`}
                     >
                       <div className="flex items-start justify-between border-b border-slate-100 pb-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-black text-slate-950">Table {ord.tableNumber}</span>
+                            <span className="text-sm font-black text-slate-950">{ticketTitle(ord)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{ord.orderNumber}</span>
+                            {ord.isParcel && ord.tableNumber && (
+                              <span className="flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-800">
+                                <Package className="h-3 w-3" aria-hidden="true" /> Parcel
+                              </span>
+                            )}
                           </div>
-                          <span className="text-[10px] text-slate-400">{ago(ord.createdAt)}</span>
+                          <span className="text-[10px] text-slate-400">
+                            {ago(ord.createdAt)}
+                            {ord.placedByStaff ? ` · by ${ord.placedByStaff}` : ''}
+                          </span>
                           {ord.customerName && (
                             <p className="mt-0.5 text-[11px] text-slate-600">
                               {ord.customerName}
@@ -166,6 +218,10 @@ export const LiveOrdersKdsView: React.FC = () => {
                       </ul>
 
                       <PaymentRow order={ord} />
+
+                      <div className="flex justify-end">
+                        <ParcelControl order={ord} />
+                      </div>
 
                       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
                         {ord.status === 'new' && (
@@ -197,7 +253,7 @@ export const LiveOrdersKdsView: React.FC = () => {
                             onClick={() => updateOrderStatus(ord.id, 'served')}
                             className="w-full rounded-lg bg-slate-800 py-1.5 text-xs font-bold text-white transition-colors hover:bg-slate-900"
                           >
-                            Mark served
+                            {ord.isParcel ? 'Mark handed over' : 'Mark served'}
                           </AsyncButton>
                         )}
                         {ord.status === 'served' && (

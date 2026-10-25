@@ -226,7 +226,7 @@ export const BillAndPaymentModal: React.FC = () => {
             <button
               disabled={busy}
               onClick={pay}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 text-sm font-bold text-white shadow-elevated transition-all hover:bg-amber-600 disabled:opacity-75"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 text-sm font-bold text-white shadow-elevated transition hover:bg-amber-600 disabled:opacity-75"
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <>Request bill • {formatCurrency(bill.total)}</>}
             </button>

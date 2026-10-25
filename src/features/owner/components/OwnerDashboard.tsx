@@ -7,6 +7,7 @@ import { useRestaurant } from '@/features/restaurants/context/RestaurantContext'
 import { api } from '@/lib/api';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useOwner } from '../context/OwnerContext';
+import { Kpi } from './Kpi';
 
 type Range = 'today' | '7d' | '30d';
 
@@ -46,14 +47,6 @@ const Change: React.FC<{ value: number | null }> = ({ value }) => {
     </span>
   );
 };
-
-const Kpi: React.FC<{ label: string; value: string; children?: React.ReactNode }> = ({ label, value, children }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-5">
-    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
-    <p className="mt-2 font-display text-3xl font-semibold text-slate-900">{value}</p>
-    <div className="mt-2 min-h-[1rem]">{children}</div>
-  </div>
-);
 
 const minutesAgo = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -305,7 +298,7 @@ export const OwnerDashboard: React.FC = () => {
                               <span className="font-semibold text-slate-900">{o.orderNumber}</span>
                               <span className="block text-xs text-slate-400">{minutesAgo(o.createdAt)}</span>
                             </td>
-                            <td className="py-2.5 text-slate-700">{o.tableNumber}</td>
+                            <td className="py-2.5 text-slate-700">{o.tableNumber || (o.isParcel ? 'Parcel' : 'Counter')}</td>
                             <td className="py-2.5 text-slate-700">{o.customerName ?? 'Guest'}</td>
                             <td className="py-2.5">
                               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-700">

@@ -9,6 +9,7 @@ import { LiveOrdersKdsView } from './components/LiveOrdersKdsView';
 import { MenuManagementView } from './components/MenuManagementView';
 import { TableQrManagementView } from './components/TableQrManagementView';
 import { GettingStarted } from './components/GettingStarted';
+import { ReportsView } from './components/ReportsView';
 import { CustomersView } from '@/features/customers/components/CustomersView';
 import { FeedbackInsightsView } from '@/features/feedback/components/FeedbackInsightsView';
 
@@ -29,6 +30,7 @@ export const OwnerApp: React.FC<{ onSignOut: () => void }> = ({ onSignOut }) => 
         {activeSection === 'tables-qr' && <TableQrManagementView />}
         {activeSection === 'customers' && <CustomersView />}
         {activeSection === 'analytics-feedback' && <FeedbackInsightsView />}
+        {activeSection === 'reports' && <ReportsView />}
       </div>
 
       <div aria-live="polite" className="pointer-events-none fixed bottom-6 right-6 z-[90]">

@@ -8,6 +8,7 @@ import {
   QrCode,
   Users,
   MessageSquareText,
+  FileSpreadsheet,
   ChevronDown,
   MapPin,
   LogOut,
@@ -40,6 +41,10 @@ export const OwnerSidebar: React.FC<{ onSignOut: () => void }> = ({ onSignOut })
     { id: 'tables-qr', label: 'Tables & QR', icon: QrCode },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'analytics-feedback', label: 'Feedback & Reviews', icon: MessageSquareText },
+    // Revenue reports are only for owners and managers; the server enforces the same rule.
+    ...(staff.role === 'owner' || staff.role === 'manager'
+      ? [{ id: 'reports' as const, label: 'Reports', icon: FileSpreadsheet }]
+      : []),
   ];
 
   return (

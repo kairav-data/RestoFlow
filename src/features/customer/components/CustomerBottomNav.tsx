@@ -18,7 +18,7 @@ export const CustomerBottomNav: React.FC = () => {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-slate-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-slate-200 bg-white px-2 pb-[env(safe-area-inset-bottom)]"
       aria-label="Guest navigation"
     >
       <ul className="flex items-stretch justify-around">

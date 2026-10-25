@@ -1,38 +1,49 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import {
-  Star,
-  Plus,
-  Heart,
-  SlidersHorizontal,
-  ChevronDown,
-  Search,
-  Leaf,
-  Beef,
-  Flame,
-} from 'lucide-react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { SlidersHorizontal, Search, Leaf, Beef } from 'lucide-react';
 import { useCustomer } from '../context/CustomerContext';
-import { DishPrice } from '@/features/menu/components/DishPrice';
-import { formatCurrency } from '@/lib/utils';
 import { CustomerHeader } from './CustomerHeader';
-import { MenuItem } from '@/types';
+import { DishCard } from './DishCard';
+import type { MenuItem } from '@/types';
+
+/** Cards rendered up front; more are added just before the guest scrolls to the end. */
+const BATCH = 24;
+/** Cards near the top whose photos load immediately instead of lazily. */
+const PRIORITY_IMAGES = 4;
 
 export const MenuListing: React.FC = () => {
   const { menuItems: MENU_ITEMS, categories: MENU_CATEGORIES } = useCustomer();
   const {
-    filters,
+    filters: liveFilters,
     setFilters,
     setIsFilterSheetOpen,
-    addToCart, quickAddToCart,
+    quickAddToCart,
     setSelectedDish,
     favoriteDishIds,
     toggleFavorite,
     cart,
   } = useCustomer();
 
+  // Typing stays instant: the list re-filters a moment later, at lower priority, instead of on every keystroke.
+  const filters = useDeferredValue(liveFilters);
+
+  // Stable handlers so memoised cards do not re-render when unrelated state changes.
+  const latest = useRef({ setSelectedDish, quickAddToCart, toggleFavorite });
+  latest.current = { setSelectedDish, quickAddToCart, toggleFavorite };
+  const openDish = useCallback((dish: MenuItem) => latest.current.setSelectedDish(dish), []);
+  const quickAdd = useCallback((dish: MenuItem) => latest.current.quickAddToCart(dish), []);
+  const toggleFav = useCallback((id: string) => latest.current.toggleFavorite(id), []);
+
+  const inCartById = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const line of cart) counts.set(line.menuItemId, (counts.get(line.menuItemId) ?? 0) + line.quantity);
+    return counts;
+  }, [cart]);
+  const favorites = useMemo(() => new Set(favoriteDishIds), [favoriteDishIds]);
+
   // Active Category Name
-  const activeCategory = MENU_CATEGORIES.find((c) => c.id === filters.category);
+  const activeCategory = MENU_CATEGORIES.find((c) => c.id === liveFilters.category);
   const title = activeCategory ? activeCategory.name : 'Complete Menu';
 
   // Filtered Items logic
@@ -89,10 +100,26 @@ export const MenuListing: React.FC = () => {
       if (filters.sortBy === 'price-high') return b.price - a.price;
       return (b.ordersCount || 0) - (a.ordersCount || 0);
     });
-  }, [filters]);
+  }, [filters, MENU_ITEMS]);
 
-  const vegCount = MENU_ITEMS.filter((i) => i.isVegetarian).length;
-  const nonVegCount = MENU_ITEMS.filter((i) => !i.isVegetarian).length;
+  const vegCount = useMemo(() => MENU_ITEMS.filter((i) => i.isVegetarian).length, [MENU_ITEMS]);
+  const nonVegCount = MENU_ITEMS.length - vegCount;
+
+  // Render the list in batches: a 200-dish menu no longer builds every card before the first frame.
+  const [visible, setVisible] = useState(BATCH);
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => setVisible(BATCH), [filteredItems]);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || visible >= filteredItems.length) return;
+    const io = new IntersectionObserver(
+      (entries) => entries[0]?.isIntersecting && setVisible((v) => v + BATCH),
+      { rootMargin: '800px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible, filteredItems.length]);
+  const shownItems = filteredItems.slice(0, visible);
 
   return (
     <div className="min-h-screen bg-white text-slate-850 pb-28">
@@ -106,11 +133,12 @@ export const MenuListing: React.FC = () => {
           <input
             type="text"
             placeholder="Search Butter Chicken, Biryani, Naan..."
-            value={filters.searchQuery}
+            value={liveFilters.searchQuery}
+            aria-label="Search the menu"
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, searchQuery: e.target.value }))
             }
-            className="w-full bg-slate-50 border border-slate-200 rounded-full pl-9 pr-4 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:bg-white transition-all"
+            className="w-full bg-slate-50 border border-slate-200 rounded-full pl-9 pr-4 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:bg-white transition"
           />
         </div>
       </div>
@@ -119,8 +147,8 @@ export const MenuListing: React.FC = () => {
       <div className="bg-white border-b border-slate-200/80 px-4 py-2 overflow-x-auto no-scrollbar flex items-center gap-2">
         <button
           onClick={() => setFilters((p) => ({ ...p, category: 'all' }))}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-            filters.category === 'all'
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+            liveFilters.category === 'all'
               ? 'bg-amber-500 text-white shadow-sm'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
@@ -131,8 +159,8 @@ export const MenuListing: React.FC = () => {
           <button
             key={cat.id}
             onClick={() => setFilters((p) => ({ ...p, category: cat.id }))}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-              filters.category === cat.id
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+              liveFilters.category === cat.id
                 ? 'bg-amber-500 text-white shadow-sm'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
@@ -143,13 +171,13 @@ export const MenuListing: React.FC = () => {
       </div>
 
       {/* Quick Veg/Non-Veg Filter Row (Matching Reference 1 Screen 2) */}
-      <div className="bg-white/80 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between border-b border-slate-200/60 sticky top-14 z-30">
+      <div className="bg-white px-4 py-2.5 flex items-center justify-between border-b border-slate-200/60 sticky top-14 z-30">
         <div className="flex items-center gap-2">
           {/* All */}
           <button
             onClick={() => setFilters((p) => ({ ...p, dietaryFilter: 'all' }))}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-              filters.dietaryFilter === 'all'
+            className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+              liveFilters.dietaryFilter === 'all'
                 ? 'bg-amber-100 text-amber-900 border border-amber-300'
                 : 'bg-slate-100 text-slate-600 border border-transparent'
             }`}
@@ -160,8 +188,8 @@ export const MenuListing: React.FC = () => {
           {/* Veg */}
           <button
             onClick={() => setFilters((p) => ({ ...p, dietaryFilter: 'veg' }))}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-              filters.dietaryFilter === 'veg'
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition ${
+              liveFilters.dietaryFilter === 'veg'
                 ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                 : 'bg-slate-100 text-slate-600 border border-transparent'
             }`}
@@ -173,8 +201,8 @@ export const MenuListing: React.FC = () => {
           {/* Non-Veg */}
           <button
             onClick={() => setFilters((p) => ({ ...p, dietaryFilter: 'non-veg' }))}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-              filters.dietaryFilter === 'non-veg'
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition ${
+              liveFilters.dietaryFilter === 'non-veg'
                 ? 'bg-rose-100 text-rose-900 border border-rose-300'
                 : 'bg-slate-100 text-slate-600 border border-transparent'
             }`}
@@ -223,121 +251,21 @@ export const MenuListing: React.FC = () => {
             </button>
           </div>
         ) : (
-          filteredItems.map((dish) => {
-            const inCart = cart.find((i) => i.menuItemId === dish.id);
-
-            return (
-              <div
+          <>
+            {shownItems.map((dish, i) => (
+              <DishCard
                 key={dish.id}
-                onClick={() => setSelectedDish(dish)}
-                className="flex items-start gap-3.5 p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-subtle hover:shadow-card hover:border-amber-300/80 transition-all cursor-pointer group"
-              >
-                {/* Left Food Image */}
-                <div className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-slate-100">
-                  <img
-                    src={dish.image}
-                    alt={dish.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  {/* Veg / Non-Veg Indicator Dot */}
-                  <div className="absolute top-1.5 left-1.5 p-0.5 bg-white/90 backdrop-blur-sm rounded-sm shadow-xs">
-                    <div
-                      className={`w-3 h-3 border rounded-xs flex items-center justify-center ${
-                        dish.isVegetarian
-                          ? 'border-emerald-600'
-                          : 'border-rose-600'
-                      }`}
-                    >
-                      <div
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          dish.isVegetarian ? 'bg-emerald-600' : 'bg-rose-600'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Favorite Heart */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavorite(dish.id);
-                    }}
-                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/40 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/60 transition-colors"
-                  >
-                    <Heart
-                      className={`w-3 h-3 ${
-                        favoriteDishIds.includes(dish.id)
-                          ? 'fill-red-500 text-red-500'
-                          : 'text-white'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Right Details */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
-                  <div>
-                    <div className="flex items-start justify-between gap-1">
-                      <h4 className="font-bold text-slate-900 text-sm leading-snug line-clamp-1">
-                        {dish.name}
-                      </h4>
-                      <DishPrice dish={dish} className="font-extrabold text-slate-900 text-sm text-right ml-1" />
-                    </div>
-
-                    {/* Rating & Orders */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                      <div className="flex items-center gap-0.5 text-amber-500 font-bold">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        <span>{dish.rating}</span>
-                      </div>
-                      <span>•</span>
-                      <span>({(dish.reviewCount / 1000).toFixed(1)}K orders)</span>
-                    </div>
-
-                    {/* Short Description */}
-                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                      {dish.description}
-                    </p>
-                  </div>
-
-                  {/* Bottom Tags & Add Button */}
-                  <div className="flex items-center justify-between gap-2 mt-2 pt-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {/* Spice Tag */}
-                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-rose-50 text-rose-600 text-[10px] font-semibold rounded-md border border-rose-100">
-                        <Flame className="w-2.5 h-2.5" />
-                        <span className="capitalize">{dish.spiceLevel}</span>
-                      </span>
-
-                      {/* Chef Special Tag */}
-                      {dish.isChefSpecial && (
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-semibold rounded-md border border-emerald-100">
-                          Chef&apos;s Special
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Circular Amber + Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        quickAddToCart(dish);
-                      }}
-                      className="relative w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm active:scale-90 transition-all shrink-0"
-                      aria-label={`Add ${dish.name}`}
-                    >
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                      {inCart && (
-                        <span className="absolute -top-1 -right-1 bg-slate-900 text-white font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
-                          {inCart.quantity}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+                dish={dish}
+                inCart={inCartById.get(dish.id) ?? 0}
+                isFavorite={favorites.has(dish.id)}
+                priority={i < PRIORITY_IMAGES}
+                onOpen={openDish}
+                onQuickAdd={quickAdd}
+                onToggleFavorite={toggleFav}
+              />
+            ))}
+            {visible < filteredItems.length && <div ref={sentinel} aria-hidden="true" className="h-px" />}
+          </>
         )}
       </main>
     </div>

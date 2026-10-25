@@ -19,6 +19,7 @@ import { useCustomer } from '../context/CustomerContext';
 import { formatCurrency } from '@/lib/utils';
 import { MenuItemPairing } from '@/types';
 import { NutritionPanel } from '@/features/menu/components/NutritionPanel';
+import { FoodImage } from '@/components/ui/FoodImage';
 
 export const DishDetailModal: React.FC = () => {
   const {
@@ -61,15 +62,17 @@ export const DishDetailModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex justify-center items-end sm:items-center">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 flex justify-center items-end sm:items-center">
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-300">
         {/* Scrollable Content */}
         <div className="overflow-y-auto flex-1 pb-24">
           {/* Hero Image Section with Action Overlay */}
           <div className="relative h-64 w-full bg-slate-900">
-            <img
+            <FoodImage
               src={selectedDish.image}
               alt={selectedDish.name}
+              displayWidth={448}
+              priority
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
@@ -78,7 +81,7 @@ export const DishDetailModal: React.FC = () => {
             <div className="absolute top-4 inset-x-4 flex items-center justify-between z-10">
               <button
                 onClick={() => setSelectedDish(null)}
-                className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+                className="w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
                 aria-label="Back"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -87,7 +90,7 @@ export const DishDetailModal: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => toggleFavorite(selectedDish.id)}
-                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+                  className="w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
                   aria-label="Favorite"
                 >
                   <Heart
@@ -106,7 +109,7 @@ export const DishDetailModal: React.FC = () => {
                       });
                     }
                   }}
-                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+                  className="w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
                   aria-label="Share"
                 >
                   <Share2 className="w-4 h-4" />
@@ -257,16 +260,17 @@ export const DishDetailModal: React.FC = () => {
                       <div
                         key={pairing.id}
                         onClick={() => togglePairing(pairing)}
-                        className={`p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-2 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
                           isSelected
                             ? 'bg-amber-50 border-amber-400 shadow-xs'
                             : 'bg-white border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         <div className="w-full h-16 rounded-lg overflow-hidden mb-1.5 relative bg-slate-100">
-                          <img
+                          <FoodImage
                             src={pairing.image}
                             alt={pairing.name}
+                            displayWidth={120}
                             className="w-full h-full object-cover"
                           />
                           {isSelected && (
@@ -329,7 +333,7 @@ export const DishDetailModal: React.FC = () => {
           {/* Add to Cart CTA */}
           <button
             onClick={handleAddToCart}
-            className="flex-1 py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.98] transition flex items-center justify-center gap-2"
           >
             <span>Add to Cart</span>
             <span>•</span>

@@ -42,6 +42,7 @@ import { useCustomer } from '../context/CustomerContext';
 import { DietaryPreference, MenuItem } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { CustomerHeader } from './CustomerHeader';
+import { FoodImage } from '@/components/ui/FoodImage';
 
 export const HelpMeChooseWizard: React.FC = () => {
   const { setActiveScreen, quickAddToCart, setSelectedDish, favoriteDishIds, toggleFavorite,
@@ -139,7 +140,7 @@ export const HelpMeChooseWizard: React.FC = () => {
               {[1, 2, 3, 4].map((s) => (
                 <div
                   key={s}
-                  className={`h-full rounded-full transition-all duration-300 ${
+                  className={`h-full rounded-full transition-colors duration-300 ${
                     s <= step ? 'bg-amber-500' : 'bg-slate-200'
                   }`}
                 />
@@ -167,7 +168,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                   <button
                     key={opt.id}
                     onClick={() => toggleMood(opt.id)}
-                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all active:scale-95 text-center ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 text-center ${
                       isSelected
                         ? 'bg-amber-50 border-amber-400 shadow-sm'
                         : 'bg-white border-slate-200 hover:border-slate-300'
@@ -188,7 +189,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                 setSelectedMoods(['Spicy', 'Comfort Food']);
                 setStep(2);
               }}
-              className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl text-left hover:border-amber-400 transition-all active:scale-[0.99]"
+              className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl text-left hover:border-amber-400 transition active:scale-[0.99]"
             >
               <div className="flex items-center gap-3">
                 <Dices className="h-6 w-6 text-amber-600" />
@@ -202,7 +203,7 @@ export const HelpMeChooseWizard: React.FC = () => {
 
             <button
               onClick={() => setStep(2)}
-              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition flex items-center justify-center gap-2 mt-4"
             >
               <span>Next</span>
               <ArrowRight className="w-4 h-4" />
@@ -227,7 +228,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                   <button
                     key={opt.id}
                     onClick={() => setHungerLevel(opt.id)}
-                    className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all ${
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition ${
                       isSelected
                         ? 'bg-amber-100 border-amber-400 text-amber-950 shadow-xs'
                         : 'bg-white border-slate-200 text-slate-700'
@@ -255,7 +256,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                     <button
                       key={opt.id}
                       onClick={() => toggleDiet(opt.id)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-semibold transition ${
                         isSelected
                           ? 'bg-amber-50 border-amber-400 text-amber-950 shadow-xs'
                           : 'bg-white border-slate-200 text-slate-700'
@@ -271,7 +272,7 @@ export const HelpMeChooseWizard: React.FC = () => {
 
             <button
               onClick={() => setStep(3)}
-              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition flex items-center justify-center gap-2 mt-4"
             >
               <span>Next</span>
               <ArrowRight className="w-4 h-4" />
@@ -296,7 +297,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                   <button
                     key={b}
                     onClick={() => setBudgetTier(b)}
-                    className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all ${
+                    className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition ${
                       isSelected
                         ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
                         : 'bg-white border-slate-200 text-slate-700'
@@ -317,7 +318,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                     <button
                       key={count}
                       onClick={() => setPeopleCount(count)}
-                      className={`py-2.5 rounded-xl border text-sm font-extrabold transition-all ${
+                      className={`py-2.5 rounded-xl border text-sm font-extrabold transition ${
                         isSelected
                           ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
                           : 'bg-white border-slate-200 text-slate-700'
@@ -345,7 +346,7 @@ export const HelpMeChooseWizard: React.FC = () => {
 
             <button
               onClick={() => setStep(5)}
-              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition flex items-center justify-center gap-2 mt-4"
             >
               <Sparkles className="w-4 h-4" />
               <span>Show Recommendations</span>
@@ -375,7 +376,7 @@ export const HelpMeChooseWizard: React.FC = () => {
             <div className="flex items-center gap-2 bg-slate-200/60 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab('top-picks')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
                   activeTab === 'top-picks'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -402,13 +403,14 @@ export const HelpMeChooseWizard: React.FC = () => {
                   return (
                     <div
                       key={dish.id}
-                      className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-card hover:border-amber-300 transition-all"
+                      className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-card hover:border-amber-300 transition"
                     >
                       {/* Image Banner with Rank # Badge */}
                       <div className="relative h-40 w-full bg-slate-900">
-                        <img
+                        <FoodImage
                           src={dish.image}
                           alt={dish.name}
+                          displayWidth={448}
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
@@ -421,7 +423,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                         {/* Favorite Button */}
                         <button
                           onClick={() => toggleFavorite(dish.id)}
-                          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+                          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
                         >
                           <Heart
                             className={`w-4 h-4 ${
@@ -488,7 +490,7 @@ export const HelpMeChooseWizard: React.FC = () => {
                           </button>
                           <button
                             onClick={() => quickAddToCart(dish)}
-                            className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all flex items-center gap-1"
+                            className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition flex items-center gap-1"
                           >
                             <span>Add to Cart</span>
                             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />

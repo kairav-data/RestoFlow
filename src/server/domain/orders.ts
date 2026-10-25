@@ -27,6 +27,9 @@ interface Row {
   total_minor: number;
   created_at: Date;
   session_id: string | null;
+  is_parcel: boolean;
+  guest_name: string | null;
+  staff_name: string | null;
   table_name: string | null;
   customer_name: string | null;
   customer_email: string | null;
@@ -59,7 +62,8 @@ export async function loadOrders(where: OrderWhere, take = 100): Promise<Order[]
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT o.id, o.order_number, o.order_type::text AS order_type, o.status::text AS status,
            o.subtotal_minor, o.tax_minor, o.service_charge_minor, o.discount_minor, o.total_minor,
-           o.created_at, o.session_id, t.name AS table_name, c.name AS customer_name, c.email AS customer_email,
+           o.created_at, o.session_id, o.is_parcel, o.guest_name, s.full_name AS staff_name,
+           t.name AS table_name, c.name AS customer_name, c.email AS customer_email,
            pay.status::text AS pay_status, pay.method::text AS pay_method,
            COALESCE((
              SELECT json_agg(json_build_object(
@@ -73,6 +77,7 @@ export async function loadOrders(where: OrderWhere, take = 100): Promise<Order[]
     FROM orders o
     LEFT JOIN dining_tables t ON t.restaurant_id = o.restaurant_id AND t.id = o.table_id
     LEFT JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN staff_users s ON s.restaurant_id = o.restaurant_id AND s.id = o.placed_by_staff_id
     LEFT JOIN LATERAL (
       SELECT p.status, p.method FROM payments p
       WHERE p.restaurant_id = o.restaurant_id AND p.order_id = o.id
@@ -98,9 +103,11 @@ export async function loadOrders(where: OrderWhere, take = 100): Promise<Order[]
       id: o.id,
       orderNumber: `#${o.order_number}`,
       tableNumber: o.table_name ?? '',
-      customerName: o.customer_name ?? undefined,
+      customerName: o.customer_name ?? o.guest_name ?? undefined,
       customerEmail: o.customer_email ?? undefined,
       orderType: TYPE_TO_CLIENT[o.order_type] ?? 'dine-in',
+      isParcel: o.is_parcel,
+      placedByStaff: o.staff_name ?? undefined,
       items,
       subtotal: fromMinor(o.subtotal_minor),
       taxes: fromMinor(o.tax_minor),

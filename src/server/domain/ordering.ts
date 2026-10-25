@@ -1,5 +1,6 @@
 import 'server-only';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../db';
 import { HttpError } from '../http';
@@ -7,50 +8,59 @@ import { chargeRates } from './restaurants';
 
 const SESSION_REUSE_MS = 6 * 3600_000;
 
+const orderLinesSchema = z
+  .array(
+    z.object({
+      menuItemId: z.string().uuid(),
+      quantity: z.number().int().min(1).max(20),
+      portion: z.enum(['half', 'full']).default('full'),
+      notes: z.string().trim().max(200).optional(),
+    }),
+  )
+  .min(1, 'Your cart is empty.')
+  .max(40);
+
 export const placeOrderSchema = z.object({
   tableName: z.string().trim().min(1).max(24),
-  items: z
-    .array(
-      z.object({
-        menuItemId: z.string().uuid(),
-        quantity: z.number().int().min(1).max(20),
-        portion: z.enum(['half', 'full']).default('full'),
-        notes: z.string().trim().max(200).optional(),
-      }),
-    )
-    .min(1, 'Your cart is empty.')
-    .max(40),
+  items: orderLinesSchema,
   notes: z.string().trim().max(300).optional(),
 });
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
 
+/** An order staff enter for a guest without a phone. A parcel needs no table; a dine-in order does. */
+export const staffOrderSchema = z
+  .object({
+    tableId: z.string().uuid().optional(),
+    isParcel: z.boolean().default(false),
+    guestName: z.string().trim().max(60).optional(),
+    items: orderLinesSchema,
+    notes: z.string().trim().max(300).optional(),
+  })
+  .refine((o) => o.isParcel || o.tableId, { message: 'Choose a table, or mark the order as a parcel.', path: ['tableId'] });
+export type StaffOrderInput = z.infer<typeof staffOrderSchema>;
+
 type ActiveRestaurant = NonNullable<Awaited<ReturnType<typeof prisma.restaurant.findFirst>>>;
+type LineInput = PlaceOrderInput['items'][number];
 
 /**
- * Creates an order for a signed-in guest. Prices, availability and totals are always taken from the database:
+ * Turns requested lines into priced order lines. Prices and availability always come from the database:
  * the client only says which dishes, how many, and which plate size.
- *
- * Speed: one parallel read (table, dishes, guest), then ONE SQL statement that reuses or opens the visit,
- * counts the visit, allocates the ticket number, and writes the order, its items and the guest dish history.
- * A single statement is atomic, so there is no multi-step transaction to wait on.
  */
-export async function placeOrder(restaurant: ActiveRestaurant, customerId: string, input: PlaceOrderInput) {
-  const restaurantId = restaurant.id;
+async function priceLines(restaurant: ActiveRestaurant, items: LineInput[]) {
+  const dishes = await prisma.menuItem.findMany({
+    where: { restaurantId: restaurant.id, id: { in: [...new Set(items.map((i) => i.menuItemId))] } },
+  });
+  return buildLines(restaurant, dishes, items);
+}
 
-  const [table, dishes, guest] = await Promise.all([
-    prisma.diningTable.findFirst({
-      where: { restaurantId, name: { equals: input.tableName, mode: 'insensitive' }, isActive: true },
-    }),
-    prisma.menuItem.findMany({
-      where: { restaurantId, id: { in: [...new Set(input.items.map((i) => i.menuItemId))] } },
-    }),
-    prisma.customer.findUniqueOrThrow({ where: { id: customerId }, select: { customerCode: true } }),
-  ]);
-  if (!table) throw new HttpError(404, 'This table is not set up for ordering. Please ask the staff.');
-
+function buildLines(
+  restaurant: ActiveRestaurant,
+  dishes: Awaited<ReturnType<typeof prisma.menuItem.findMany>>,
+  items: LineInput[],
+) {
   // Merge repeated lines of the same dish and size.
-  const lines = new Map<string, PlaceOrderInput['items'][number]>();
-  for (const line of input.items) {
+  const lines = new Map<string, LineInput>();
+  for (const line of items) {
     const key = `${line.menuItemId}:${line.portion}`;
     const prev = lines.get(key);
     lines.set(key, prev ? { ...prev, quantity: Math.min(20, prev.quantity + line.quantity) } : line);
@@ -81,10 +91,50 @@ export async function placeOrder(restaurant: ActiveRestaurant, customerId: strin
   const subtotal = orderLines.reduce((sum, l) => sum + l.unit * l.qty, 0);
   const tax = Math.round((subtotal * taxPercent) / 100);
   const service = Math.round((subtotal * servicePercent) / 100);
-  const total = subtotal + tax + service;
+  return { orderLines, subtotal, tax, service, total: subtotal + tax + service, itemsJson: JSON.stringify(orderLines) };
+}
+
+/** CTE body that atomically allocates the next daily ticket number for a branch. */
+function nextTicketSql(restaurant: ActiveRestaurant, branchId: string, now: Date) {
+  return Prisma.sql`
+      INSERT INTO order_ticket_counters (branch_id, day, last_number)
+      VALUES (
+        ${branchId}::uuid,
+        (${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text)::date,
+        COALESCE((
+          SELECT max(order_number) FROM orders
+          WHERE restaurant_id = ${restaurant.id}::uuid AND branch_id = ${branchId}::uuid
+            AND created_at >= (date_trunc('day', ${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text) AT TIME ZONE ${restaurant.timezone}::text)
+        ), 0) + 1
+      )
+      ON CONFLICT (branch_id, day) DO UPDATE SET last_number = order_ticket_counters.last_number + 1
+      RETURNING last_number`;
+}
+
+/**
+ * Creates an order for a signed-in guest.
+ *
+ * Speed: one parallel read (table, dishes, guest), then ONE SQL statement that reuses or opens the visit,
+ * counts the visit, allocates the ticket number, and writes the order, its items and the guest dish history.
+ * A single statement is atomic, so there is no multi-step transaction to wait on.
+ */
+export async function placeOrder(restaurant: ActiveRestaurant, customerId: string, input: PlaceOrderInput) {
+  const restaurantId = restaurant.id;
+
+  const [table, dishes, guest] = await Promise.all([
+    prisma.diningTable.findFirst({
+      where: { restaurantId, name: { equals: input.tableName, mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.menuItem.findMany({
+      where: { restaurantId, id: { in: [...new Set(input.items.map((i) => i.menuItemId))] } },
+    }),
+    prisma.customer.findUniqueOrThrow({ where: { id: customerId }, select: { customerCode: true } }),
+  ]);
+  if (!table) throw new HttpError(404, 'This table is not set up for ordering. Please ask the staff.');
+
+  const { subtotal, tax, service, total, itemsJson } = buildLines(restaurant, dishes, input.items);
   const now = new Date();
   const reuseSince = new Date(now.getTime() - SESSION_REUSE_MS);
-  const itemsJson = JSON.stringify(orderLines);
   const notes = input.notes ?? null;
 
   const created = await prisma.$queryRaw<{ id: string }[]>`
@@ -110,20 +160,7 @@ export async function placeOrder(restaurant: ActiveRestaurant, customerId: strin
       DO UPDATE SET last_visit_at = EXCLUDED.last_visit_at, visit_count = restaurant_customers.visit_count + 1
       RETURNING 1
     ),
-    ticket AS (
-      INSERT INTO order_ticket_counters (branch_id, day, last_number)
-      VALUES (
-        ${table.branchId}::uuid,
-        (${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text)::date,
-        COALESCE((
-          SELECT max(order_number) FROM orders
-          WHERE restaurant_id = ${restaurantId}::uuid AND branch_id = ${table.branchId}::uuid
-            AND created_at >= (date_trunc('day', ${now}::timestamptz AT TIME ZONE ${restaurant.timezone}::text) AT TIME ZONE ${restaurant.timezone}::text)
-        ), 0) + 1
-      )
-      ON CONFLICT (branch_id, day) DO UPDATE SET last_number = order_ticket_counters.last_number + 1
-      RETURNING last_number
-    ),
+    ticket AS (${nextTicketSql(restaurant, table.branchId, now)}),
     ord AS (
       INSERT INTO orders (restaurant_id, branch_id, table_id, session_id, customer_id, order_number, order_type,
                           subtotal_minor, tax_minor, service_charge_minor, total_minor, notes, created_at, updated_at)
@@ -148,6 +185,67 @@ export async function placeOrder(restaurant: ActiveRestaurant, customerId: strin
       SELECT ${customerId}::uuid, ${guest.customerCode}::text, ${restaurantId}::uuid, ${table.branchId}::uuid, (SELECT id FROM sess),
              (SELECT id FROM ord), l.id, (SELECT order_number FROM ord), ${table.name}::text, l.menu_item_id, l.name, l.portion,
              l.qty, l.unit, l.unit * l.qty, ${now}::timestamptz
+      FROM jsonb_to_recordset(${itemsJson}::jsonb)
+           AS l(id uuid, menu_item_id uuid, name text, unit int, qty int, portion text, notes text)
+      RETURNING 1
+    )
+    SELECT id FROM ord`;
+
+  return created[0].id;
+}
+
+/**
+ * Creates an order that staff enter on behalf of a guest (no phone, no internet, or a counter parcel).
+ * There is no guest account, so no visit or dish history is recorded; the optional name is kept on the order.
+ * The table and staff member are verified against the signed-in restaurant, never trusted from the client.
+ */
+export async function placeStaffOrder(
+  restaurant: ActiveRestaurant,
+  staffId: string,
+  input: StaffOrderInput,
+): Promise<string> {
+  const restaurantId = restaurant.id;
+
+  const [table, staff, priced] = await Promise.all([
+    input.tableId
+      ? prisma.diningTable.findFirst({ where: { id: input.tableId, restaurantId, isActive: true } })
+      : Promise.resolve(null),
+    prisma.staffUser.findFirst({ where: { id: staffId, restaurantId }, select: { branchId: true } }),
+    priceLines(restaurant, input.items),
+  ]);
+  if (input.tableId && !table) throw new HttpError(404, 'That table no longer exists. Please pick another.');
+  if (!staff) throw new HttpError(401, 'Please sign in again.');
+
+  // A parcel at the counter has no table, so it goes to the staff member's branch, else the main branch.
+  let branchId = table?.branchId ?? staff.branchId;
+  if (!branchId) {
+    const branch = await prisma.branch.findFirst({ where: { restaurantId, isActive: true }, orderBy: { createdAt: 'asc' } });
+    if (!branch) throw new HttpError(409, 'This restaurant has no branch yet.');
+    branchId = branch.id;
+  }
+
+  const { subtotal, tax, service, total, itemsJson } = priced;
+  const now = new Date();
+  const orderType = table ? 'dine_in' : 'takeaway';
+
+  const created = await prisma.$queryRaw<{ id: string }[]>`
+    WITH
+    ticket AS (${nextTicketSql(restaurant, branchId, now)}),
+    ord AS (
+      INSERT INTO orders (restaurant_id, branch_id, table_id, order_number, order_type, is_parcel, guest_name,
+                          placed_by_staff_id, subtotal_minor, tax_minor, service_charge_minor, total_minor, notes,
+                          created_at, updated_at)
+      SELECT ${restaurantId}::uuid, ${branchId}::uuid, ${table?.id ?? null}::uuid, (SELECT last_number FROM ticket),
+             ${orderType}::order_type, ${input.isParcel}, ${input.guestName || null}::text, ${staffId}::uuid,
+             ${subtotal}::int, ${tax}::int, ${service}::int, ${total}::int, ${input.notes || null}::text,
+             ${now}::timestamptz, ${now}::timestamptz
+      RETURNING id
+    ),
+    items AS (
+      INSERT INTO order_items (id, order_id, restaurant_id, menu_item_id, name_snapshot, unit_price_minor, quantity,
+                               line_total_minor, portion, notes, created_at)
+      SELECT l.id, (SELECT id FROM ord), ${restaurantId}::uuid, l.menu_item_id, l.name, l.unit, l.qty, l.unit * l.qty,
+             l.portion, l.notes, ${now}::timestamptz
       FROM jsonb_to_recordset(${itemsJson}::jsonb)
            AS l(id uuid, menu_item_id uuid, name text, unit int, qty int, portion text, notes text)
       RETURNING 1

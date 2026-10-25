@@ -6,6 +6,7 @@ import { DishPrice } from '@/features/menu/components/DishPrice';
 import { formatCurrency } from '@/lib/utils';
 import { useCustomer } from '../context/CustomerContext';
 import { CustomerHeader } from './CustomerHeader';
+import { FoodImage } from '@/components/ui/FoodImage';
 
 export const CustomerHome: React.FC = () => {
   const {
@@ -47,8 +48,7 @@ export const CustomerHome: React.FC = () => {
 
       <main className="mx-auto max-w-md space-y-7 px-4 py-4">
         <section className="relative overflow-hidden rounded-xl bg-obsidian-900 text-white">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={restaurant.heroImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+          <FoodImage src={restaurant.heroImage} displayWidth={448} priority className="absolute inset-0 h-full w-full object-cover opacity-50" />
           <div className="absolute inset-0 bg-gradient-to-t from-obsidian-950 via-obsidian-950/50 to-transparent" />
           <div className="relative flex min-h-[15rem] flex-col justify-end gap-3 p-5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-200">
@@ -114,18 +114,13 @@ export const CustomerHome: React.FC = () => {
                   className="group flex w-44 shrink-0 cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white"
                 >
                   <div className="relative h-28 overflow-hidden bg-slate-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={dish.image}
-                      alt={dish.name}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
+                    <FoodImage src={dish.image} alt={dish.name} displayWidth={176} className="h-full w-full object-cover" />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleFavorite(dish.id);
                       }}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm"
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white"
                       aria-label={favoriteDishIds.includes(dish.id) ? 'Remove from favourites' : 'Save to favourites'}
                     >
                       <Heart className={`h-4 w-4 ${favoriteDishIds.includes(dish.id) ? 'fill-rose-500 text-rose-500' : ''}`} />
@@ -168,12 +163,7 @@ export const CustomerHome: React.FC = () => {
                 className="group flex flex-col items-center rounded-xl border border-slate-200 bg-white p-2 text-center transition-colors hover:border-amber-300 active:scale-95"
               >
                 <span className="mb-1.5 h-16 w-full overflow-hidden rounded-lg bg-slate-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={cat.image}
-                    alt=""
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
+                  <FoodImage src={cat.image} displayWidth={120} className="h-full w-full object-cover" />
                 </span>
                 <span className="line-clamp-1 text-xs font-semibold text-slate-800">{cat.name}</span>
                 <span className="text-[11px] text-slate-500">{menuItems.filter((m) => m.category === cat.id).length} items</span>

@@ -23,7 +23,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   const canGoBack = showBack || activeScreen !== 'home';
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-slate-50 px-4 py-3">
       <div className="mx-auto flex max-w-md items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {canGoBack && (

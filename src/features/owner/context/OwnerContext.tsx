@@ -14,6 +14,7 @@ export type OwnerNavSection =
   | 'tables-qr'
   | 'customers'
   | 'analytics-feedback'
+  | 'reports'
   | 'settings';
 
 export type { NewDish };
@@ -33,6 +34,15 @@ export interface Toast {
 
 type PayMethod = 'upi' | 'card' | 'cash' | 'wallet';
 
+/** An order staff enter for a guest. Prices are worked out on the server. */
+export interface StaffOrderDraft {
+  tableId?: string;
+  isParcel: boolean;
+  guestName?: string;
+  notes?: string;
+  items: { menuItemId: string; quantity: number; portion: 'half' | 'full' }[];
+}
+
 interface OwnerContextType {
   staff: StaffProfile;
   activeSection: OwnerNavSection;
@@ -45,6 +55,8 @@ interface OwnerContextType {
   refreshOrders: () => Promise<void>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   markPaid: (orderId: string, method: PayMethod) => Promise<void>;
+  placeStaffOrder: (draft: StaffOrderDraft) => Promise<ActionResult>;
+  setParcel: (orderId: string, isParcel: boolean) => Promise<void>;
   menuItems: MenuItem[];
   categories: MenuCategory[];
   toggleItemAvailability: (itemId: string) => Promise<void>;
@@ -130,6 +142,29 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
       const { order } = await api<{ order: Order }>(`/api/portal/orders/${orderId}/payment`, { method: 'POST', body: { method } });
       setOrders((prev) => prev.map((o) => (o.id === order.id ? order : o)));
       notify(`Order ${order.orderNumber} marked as paid.`);
+    } catch (err) {
+      fail(err);
+      void refreshOrders();
+    }
+  };
+
+  const placeStaffOrder = async (draft: StaffOrderDraft): Promise<ActionResult> => {
+    try {
+      const { order } = await api<{ order: Order }>('/api/portal/orders', { method: 'POST', body: draft });
+      setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
+      notify(`Order ${order.orderNumber} sent to the kitchen.`);
+      return { ok: true };
+    } catch (err) {
+      fail(err);
+      return { ok: false, error: errorText(err) };
+    }
+  };
+
+  const setParcel = async (orderId: string, isParcel: boolean) => {
+    try {
+      const { order } = await api<{ order: Order }>(`/api/portal/orders/${orderId}`, { method: 'PATCH', body: { isParcel } });
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? order : o)));
+      notify(isParcel ? `Order ${order.orderNumber} marked as parcel.` : `Order ${order.orderNumber} is no longer a parcel.`);
     } catch (err) {
       fail(err);
       void refreshOrders();
@@ -227,6 +262,8 @@ export const OwnerProvider: React.FC<{ staff: StaffProfile; children: React.Reac
       refreshOrders,
       updateOrderStatus,
       markPaid,
+      placeStaffOrder,
+      setParcel,
       menuItems,
       categories,
       toggleItemAvailability,

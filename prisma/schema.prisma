@@ -297,6 +297,9 @@ model Order {
   discountMinor      Int         @default(0) @map("discount_minor")
   totalMinor         Int         @map("total_minor")
   notes              String?
+  isParcel           Boolean     @default(false) @map("is_parcel")
+  guestName          String?     @map("guest_name")
+  placedByStaffId    String?     @map("placed_by_staff_id") @db.Uuid
   readyAt            DateTime?   @map("ready_at") @db.Timestamptz
   servedAt           DateTime?   @map("served_at") @db.Timestamptz
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz

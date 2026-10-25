@@ -136,14 +136,25 @@ export const CustomerProvider: React.FC<{ tableName: string; children: React.Rea
   }, [cart, cartKey]);
 
   const refreshing = useRef(false);
+  const lastOrdersJson = useRef('[]');
   const refreshOrders = useCallback(async () => {
     // A slow connection must not stack up requests: skip this tick while the last one is still running.
     if (refreshing.current) return;
     refreshing.current = true;
     try {
-      setOrders((await api<{ orders: Order[] }>(`/api/r/${restaurant.slug}/orders`, { background: true })).orders);
+      const { orders: next } = await api<{ orders: Order[] }>(`/api/r/${restaurant.slug}/orders`, { background: true });
+      // Most polls return exactly what is already on screen. Skipping those avoids re-rendering the whole
+      // guest app every few seconds, which is what made scrolling stutter on phones.
+      const json = JSON.stringify(next);
+      if (json !== lastOrdersJson.current) {
+        lastOrdersJson.current = json;
+        setOrders(next);
+      }
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setOrders([]);
+      if (err instanceof ApiError && err.status === 401) {
+        lastOrdersJson.current = '[]';
+        setOrders([]);
+      }
     } finally {
       refreshing.current = false;
     }
@@ -152,6 +163,7 @@ export const CustomerProvider: React.FC<{ tableName: string; children: React.Rea
   // Live order tracking: poll while a guest is signed in and the tab is visible.
   useEffect(() => {
     if (!guest) {
+      lastOrdersJson.current = '[]';
       setOrders([]);
       return;
     }
@@ -190,6 +202,7 @@ export const CustomerProvider: React.FC<{ tableName: string; children: React.Rea
   const signOutGuest = () => {
     void signOutGuestApi();
     setGuest(null);
+    lastOrdersJson.current = '[]';
     setOrders([]);
   };
 

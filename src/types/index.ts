@@ -90,9 +90,13 @@ export interface OrderItem {
 export interface Order {
   id: string;
   orderNumber: string; // e.g. #1028
-  tableNumber: string; // e.g. T05
+  tableNumber: string; // e.g. T05; empty for a counter parcel
   customerName?: string;
   orderType: OrderType;
+  /** The kitchen packs this order to take away. */
+  isParcel?: boolean;
+  /** Name of the staff member who entered the order for the guest; unset for guest QR orders. */
+  placedByStaff?: string;
   items: OrderItem[];
   subtotal: number;
   taxes: number; // 5% GST

@@ -68,7 +68,7 @@ export const FilterBottomSheet: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-center items-end sm:items-center">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 flex justify-center items-end sm:items-center">
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -100,7 +100,7 @@ export const FilterBottomSheet: React.FC = () => {
                   <button
                     key={opt.id}
                     onClick={() => toggleDietaryPref(opt.id)}
-                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left ${
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition text-left ${
                       isSelected
                         ? 'bg-amber-50 border-amber-400 text-amber-950 font-bold shadow-xs'
                         : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
@@ -132,7 +132,7 @@ export const FilterBottomSheet: React.FC = () => {
                         spiceLevel: isSelected ? 'all' : spice.id,
                       }))
                     }
-                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all ${
+                    className={`flex flex-col items-center justify-center p-2.5 rounded-xl border transition ${
                       isSelected
                         ? 'bg-amber-50 border-amber-400 shadow-xs'
                         : 'bg-white border-slate-200 hover:border-slate-300'
@@ -170,7 +170,7 @@ export const FilterBottomSheet: React.FC = () => {
                         priceRange: isSelected ? 'all' : range.id,
                       }))
                     }
-                    className={`py-2 px-1 text-center rounded-xl border text-xs font-semibold transition-all truncate ${
+                    className={`py-2 px-1 text-center rounded-xl border text-xs font-semibold transition truncate ${
                       isSelected
                         ? 'bg-amber-100 border-amber-400 text-amber-950 shadow-xs'
                         : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
@@ -228,7 +228,7 @@ export const FilterBottomSheet: React.FC = () => {
         <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-slate-200 p-4 shadow-elevated z-30">
           <button
             onClick={() => setIsFilterSheetOpen(false)}
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+            className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md active:scale-[0.99] transition flex items-center justify-center gap-1.5"
           >
             <span>Apply Filters ({MENU_ITEMS.length} items)</span>
           </button>

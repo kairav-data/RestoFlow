@@ -15,6 +15,7 @@ import {
 import { useCustomer } from '../context/CustomerContext';
 import { formatCurrency } from '@/lib/utils';
 import { CustomerHeader } from './CustomerHeader';
+import { FoodImage } from '@/components/ui/FoodImage';
 
 export const CartModal: React.FC = () => {
   const {
@@ -56,7 +57,7 @@ export const CartModal: React.FC = () => {
             </div>
             <button
               onClick={() => setActiveScreen('menu')}
-              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm transition"
             >
               Browse Digital Menu
             </button>
@@ -89,9 +90,10 @@ export const CartModal: React.FC = () => {
               <div className="divide-y divide-slate-100">
                 {cart.map((item) => (
                   <div key={item.id} className="py-3 flex items-start gap-3">
-                    <img
+                    <FoodImage
                       src={item.image}
                       alt={item.name}
+                      displayWidth={56}
                       className="w-14 h-14 rounded-xl object-cover shrink-0 bg-slate-100"
                     />
 
@@ -189,7 +191,7 @@ export const CartModal: React.FC = () => {
             <button
               disabled={isPlacingOrder}
               onClick={handleSendOrder}
-              className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-75 text-white font-bold text-sm rounded-2xl shadow-elevated active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-75 text-white font-bold text-sm rounded-2xl shadow-elevated active:scale-[0.99] transition flex items-center justify-center gap-2"
             >
               {isPlacingOrder ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

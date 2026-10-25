@@ -5,6 +5,7 @@ import { Flame, Plus, Star } from 'lucide-react';
 import { useCustomer } from '../context/CustomerContext';
 import { DishPrice } from '@/features/menu/components/DishPrice';
 import { CustomerHeader } from './CustomerHeader';
+import { FoodImage } from '@/components/ui/FoodImage';
 
 /** The dishes guests have ordered most over the last two weeks. Counts come from real orders. */
 export const PopularNowView: React.FC = () => {
@@ -38,14 +39,13 @@ export const PopularNowView: React.FC = () => {
               <li
                 key={dish.id}
                 onClick={() => setSelectedDish(dish)}
-                className="group flex cursor-pointer items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-subtle transition-all hover:border-amber-300"
+                className="group flex cursor-pointer items-center gap-3.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-subtle transition hover:border-amber-300"
               >
                 <span className="w-6 text-center text-sm font-black text-slate-400 transition-colors group-hover:text-amber-600">
                   {idx + 1}
                 </span>
                 <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={dish.image} alt={dish.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                  <FoodImage src={dish.image} alt={dish.name} displayWidth={64} className="h-full w-full object-cover" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="line-clamp-1 text-sm font-bold text-slate-900">{dish.name}</h4>
